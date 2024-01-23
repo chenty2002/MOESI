@@ -5,14 +5,23 @@ import chisel3.stage.ChiselStage
 import chisel3.util._
 
 class MESITop() extends Module with HasMESIParameters {
+  /*
+  proc0   proc1
+    |       |
+ l1cache l1cache
+     \      /
+      memory
+   */
+
   val io = IO(new Bundle() {
-    val coreOp = Input(Vec(coreNum, UInt(coreOpBits.W)))
-    val addr = Input(Vec(coreNum, UInt(addrBits.W)))
-    val cacheInput = Input(Vec(coreNum, UInt(cacheBlockBits.W)))
-    val cacheOutput = Output(Vec(coreNum, UInt(cacheBlockBits.W)))
+    val procOp = Input(Vec(procNum, UInt(procOpBits.W)))
+    val addr = Input(Vec(procNum, UInt(addrBits.W)))
+    val cacheInput = Input(Vec(procNum, UInt(cacheBlockBits.W)))
+    val cacheOutput = Output(Vec(procNum, UInt(cacheBlockBits.W)))
+    val memory = Output(Vec(1<<addrBits, UInt(cacheBlockBits.W)))
   })
 
-  val l1s = (0 until coreNum).map(i => Module(new L1Cache(hostPid = i.U(coreNumBits.W))))
+  val l1s = (0 until procNum).map(i => Module(new L1Cache(hostPid = i.U(procNumBits.W))))
   val mem = Module(new Memory)
 
   val memWen = RegInit(false.B)
@@ -22,6 +31,7 @@ class MESITop() extends Module with HasMESIParameters {
   mem.io.wen := memWen
   mem.io.addr := memAddr
   mem.io.wr := memWr
+  io.memory := mem.io.rd
 
   l1s.foreach(_.io.mem := mem.io.rd)
   for(i <- l1s.indices) {
@@ -32,14 +42,14 @@ class MESITop() extends Module with HasMESIParameters {
     }
   }
 
-  l1s(0).io.coreOp := io.coreOp(0)
+  l1s(0).io.procOp := io.procOp(0)
   l1s(0).io.prAddr := io.addr(0)
   l1s(0).io.cacheInput := io.cacheInput(0)
   io.cacheOutput(0) := l1s(0).io.cacheOutput
   l1s(0).io.busIn := l1s(1).io.busOut
   l1s(0).io.busValid := l1s(1).io.validateBus
 
-  l1s(1).io.coreOp := io.coreOp(1)
+  l1s(1).io.procOp := io.procOp(1)
   l1s(1).io.prAddr := io.addr(1)
   l1s(1).io.cacheInput := io.cacheInput(1)
   io.cacheOutput(1) := l1s(1).io.cacheOutput

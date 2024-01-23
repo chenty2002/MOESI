@@ -12,9 +12,9 @@ trait HasMESIParameters {
   def Fill: UInt = 1.U(busOpBits.W)
   def Invalid: UInt = 0.U(busOpBits.W)
 
-  val coreOpBits: Int = 2
-  def PrRd: UInt = 1.U(coreOpBits.W)
-  def PrWr: UInt = 2.U(coreOpBits.W)
+  val procOpBits: Int = 2
+  def PrRd: UInt = 1.U(procOpBits.W)
+  def PrWr: UInt = 2.U(procOpBits.W)
 
   val stateBits: Int = 2
   def Modified: UInt = 3.U(stateBits.W)
@@ -22,8 +22,8 @@ trait HasMESIParameters {
   def Shared: UInt = 1.U(stateBits.W)
   def Invalidated: UInt = 0.U(stateBits.W)
 
-  val coreNum: Int = 2
-  val coreNumBits = log2Up(coreNum)
+  val procNum: Int = 2
+  val procNumBits = log2Up(procNum)
   val pidBits: Int = 2
   val tagBits: Int = 2
   val indexBits: Int = 2

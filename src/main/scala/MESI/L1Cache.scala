@@ -5,19 +5,27 @@ import chisel3.util._
 
 class L1Cache(val hostPid: UInt) extends Module with HasMESIParameters {
   val io = IO(new Bundle() {
-    val coreOp = Input(UInt(coreOpBits.W))
+    // processor oprations
+    val procOp = Input(UInt(procOpBits.W))
+    // whether to halt the processor to wait for requests
     val prHlt = Output(new Bool)
+    // the address of the operation
     val prAddr = Input(UInt(addrBits.W))
 
+    // the data requests
     val cacheOutput = Output(UInt(cacheBlockBits.W))
     val cacheInput = Input(UInt(cacheBlockBits.W))
 
+    // the requests on the bus
     val busIn = Input(new BusData)
     val busOut = Output(new BusData)
 
+    // whether the bus is valid to read
     val busValid = Input(new Bool)
+    // the cache needs to use the bus
     val validateBus = Output(new Bool)
 
+    // direct access to the memory
     val mem = Input(Vec(1<<addrBits, UInt(cacheBlockBits.W)))
     val memAddr = Output(UInt(addrBits.W))
     val memWr = Output(UInt(cacheBlockBits.W))
@@ -55,14 +63,12 @@ class L1Cache(val hostPid: UInt) extends Module with HasMESIParameters {
   val busIndex = io.busIn.index
   val busData = io.busIn.cacheBlock
 
-  // different access of bus for different cores
-  val busAccessCounter = RegInit(0.U(coreNumBits.W))
-
+  // whether the address hits
   def isHit(t: UInt, i: UInt): Bool = {
     cacheStatus(i) =/= Invalidated && tagDirectory(index) === t
   }
 
-  busAccessCounter := busAccessCounter + 1.U
+  // the request from the bus is from another processor and it hits a block
   when(guestId =/= hostPid && isHit(busTag, busIndex) && io.busValid) {
     switch(cacheStatus(busIndex)) {
       is(Modified) {
@@ -117,7 +123,7 @@ class L1Cache(val hostPid: UInt) extends Module with HasMESIParameters {
           switch(busTrans) {
             is(Flush) {
               prHlt := false.B
-              switch(io.coreOp) {
+              switch(io.procOp) {
                 is(PrRd) {
                   L1Cache(busIndex) := busData
                   cacheOutput := L1Cache(busIndex)
@@ -134,12 +140,13 @@ class L1Cache(val hostPid: UInt) extends Module with HasMESIParameters {
         }
       }
     }
+    // the request from the bus is from another processor but it does not hit a block
   }.elsewhen(guestId =/= hostPid && !isHit(busTag, busIndex) && io.busValid) {
     when(prHlt) {
       switch(busTrans) {
         is(Flush) {
           prHlt := false.B
-          switch(io.coreOp) {
+          switch(io.procOp) {
             is(PrRd) {
               L1Cache(busIndex) := busData
               tagDirectory(index) := busTag
@@ -157,13 +164,14 @@ class L1Cache(val hostPid: UInt) extends Module with HasMESIParameters {
     }
   }
 
-  // core requests
-  val invalidStateCounter = RegInit(0.U((coreNumBits+1).W))
+  // processor requests
+  val invalidStateCounter = RegInit(0.U((procNumBits+1).W))
 
+  // the request from the processor hits
   when(isHit(tag, index)) {
     switch(cacheStatus(index)) {
       is(Modified) {
-        switch(io.coreOp) {
+        switch(io.procOp) {
           is(PrRd) {
             cacheOutput := L1Cache(index)
           }
@@ -174,7 +182,7 @@ class L1Cache(val hostPid: UInt) extends Module with HasMESIParameters {
         }
       }
       is(Exclusive) {
-        switch(io.coreOp) {
+        switch(io.procOp) {
           is(PrRd) {
             cacheOutput := L1Cache(index)
           }
@@ -186,7 +194,7 @@ class L1Cache(val hostPid: UInt) extends Module with HasMESIParameters {
         }
       }
       is(Shared) {
-        switch(io.coreOp) {
+        switch(io.procOp) {
           is(PrRd) {
             cacheOutput := L1Cache(index)
           }
@@ -203,16 +211,17 @@ class L1Cache(val hostPid: UInt) extends Module with HasMESIParameters {
         }
       }
       is(Invalidated) {
-        switch(io.coreOp) {
+        switch(io.procOp) {
           is(PrRd) {
             busOut.pid := hostPid
             busOut.busTransaction := BusUpgrade
             busOut.tag := tag
             busOut.index := index
 
+            // the cache needs to wait for the response from the bus
             validateBus := true.B
             prHlt := true.B
-            when(invalidStateCounter === (coreNum+1).U) {
+            when(invalidStateCounter === (procNum+1).U) {
               busOut.busTransaction := Fill
               busOut.cacheBlock := io.mem(io.prAddr)
 
@@ -233,9 +242,10 @@ class L1Cache(val hostPid: UInt) extends Module with HasMESIParameters {
             busOut.tag := tag
             busOut.index := index
 
+            // the cache needs to wait for the response from the bus
             validateBus := true.B
             prHlt := true.B
-            when(invalidStateCounter === (coreNum+1).U) {
+            when(invalidStateCounter === (procNum+1).U) {
               busOut.busTransaction := Fill
               busOut.cacheBlock := io.mem(io.prAddr)
 
@@ -253,8 +263,9 @@ class L1Cache(val hostPid: UInt) extends Module with HasMESIParameters {
         }
       }
     }
+    // the address does not hit
   }.otherwise {
-    switch(io.coreOp) {
+    switch(io.procOp) {
       is(PrRd) {
         busOut.pid := hostPid
         busOut.busTransaction := BusRd
@@ -263,7 +274,7 @@ class L1Cache(val hostPid: UInt) extends Module with HasMESIParameters {
 
         validateBus := true.B
         prHlt := true.B
-        when(invalidStateCounter === (coreNum+1).U) {
+        when(invalidStateCounter === (procNum+1).U) {
           busOut.busTransaction := Fill
           busOut.cacheBlock := io.mem(io.prAddr)
 
@@ -290,7 +301,7 @@ class L1Cache(val hostPid: UInt) extends Module with HasMESIParameters {
 
         validateBus := true.B
         prHlt := true.B
-        when(invalidStateCounter === (coreNum+1).U) {
+        when(invalidStateCounter === (procNum+1).U) {
           busOut.busTransaction := Fill
           busOut.cacheBlock := io.mem(io.prAddr)
 
