@@ -23,7 +23,7 @@ trait HasMESIParameters {
   def Invalidated: UInt = 0.U(stateBits.W)
 
   val procNum: Int = 2
-  val procNumBits = log2Up(procNum)
+  val procNumBits = log2Up(procNum+1)
   val pidBits: Int = 2
   val tagBits: Int = 2
   val indexBits: Int = 2
