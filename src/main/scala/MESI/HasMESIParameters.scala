@@ -4,13 +4,13 @@ import chisel3._
 import chisel3.util._
 
 trait HasMESIParameters {
-  val busOpBits: Int = 3
-  def BusRd: UInt = 5.U(busOpBits.W)
-  def BusRdX: UInt = 4.U(busOpBits.W)
-  def BusUpgrade: UInt = 3.U(busOpBits.W)
-  def Flush: UInt = 2.U(busOpBits.W)
-  def Fill: UInt = 1.U(busOpBits.W)
-  def Invalid: UInt = 0.U(busOpBits.W)
+  val busTransBits: Int = 3
+  def BusRd: UInt = 5.U(busTransBits.W)
+  def BusRdX: UInt = 4.U(busTransBits.W)
+  def BusUpgrade: UInt = 3.U(busTransBits.W)
+  def Flush: UInt = 2.U(busTransBits.W)
+  def Fill: UInt = 1.U(busTransBits.W)
+  def Invalid: UInt = 0.U(busTransBits.W)
 
   val procOpBits: Int = 2
   def PrRd: UInt = 1.U(procOpBits.W)
@@ -22,9 +22,8 @@ trait HasMESIParameters {
   def Shared: UInt = 1.U(stateBits.W)
   def Invalidated: UInt = 0.U(stateBits.W)
 
-  val procNum: Int = 2
+  val procNum: Int = 4
   val procNumBits = log2Up(procNum+1)
-  val pidBits: Int = 2
   val tagBits: Int = 2
   val indexBits: Int = 2
   val cacheBlockNum: Int = 4
@@ -40,10 +39,10 @@ trait HasMESIParameters {
     val tagStart = indexEnd
     val tagEnd = tagStart + tagBits - 1
     val tag = addr(tagEnd, tagStart)
-    (index, tag)
+    (tag, index)
   }
 
   def getAddr(index: UInt, tag: UInt): UInt = {
-    Cat(index, tag)
+    Cat(tag, index)
   }
 }

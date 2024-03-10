@@ -2,7 +2,6 @@ package MESI
 
 import chisel3._
 import chisel3.util._
-import MESI.Arbiter
 
 class Bus extends Module with HasMESIParameters {
   val io = IO(new Bundle() {
@@ -12,64 +11,102 @@ class Bus extends Module with HasMESIParameters {
     val memIn = Input(new BusData)
     val memOut = Output(new BusData)
     val memWen = Output(new Bool)
+    val hold = Output(new Bool)
 
     val validateBus = Input(Vec(procNum, new Bool))
+
+    // DEBUG info
+    val valid = Output(new Bool)
   })
 
-  val arbiter = Module(new Arbiter)
-  val arbiterIn = WireDefault(io.validateBus)
-
-//  def filterSharedFlush(l1data: Vec[BusData], validates: Vec[Bool]): Vec[Bool] = {
-//
-//    for(i <- 0 until procNum) {
-//      when(l1data(i).valid && l1data(i).pid =/= 0.U && validates(i)) {
-//
-//      }
-//    }
-//  }
-
+  val arbiter = Module(new Arb(procNum))
   arbiter.io.requests := io.validateBus
 
-  val valid = WireDefault(false.B)
-//  io.busValid.foreach(_ := valid)
-  valid := io.validateBus.reduce(_ || _)
+  val valid = io.validateBus.reduce(_ || _)
+  io.valid := valid
 
-  val pid = RegInit(0.U(procNumBits.W))
+  val memHold = RegInit(false.B)
+  val flushHold = RegInit(false.B)
   val busData = RegInit(0.U.asTypeOf(new BusData))
+  val pid = OHToUInt(arbiter.io.grant)
   val memData = RegInit(0.U.asTypeOf(new BusData))
-  val procResp = RegInit(VecInit.fill(procNum)(0.U.asTypeOf(new BusData)))
+  val memWen = RegInit(false.B)
 
-//  pid := io.pidIn
-//  io.pidOut := pid
-  pid := OHToUInt(arbiter.io.grant)
-  io.memWen := false.B
+  val memHoldFlag = RegInit(false.B)
+  io.hold := memHold || flushHold
+
+  //  pid := io.pidIn
+  //  io.pidOut := pid
+  io.memWen := memWen
   memData := io.memIn
-  when(valid) {
-    busData := io.l1CachesIn(pid)
-    io.l1CachesOut.foreach(_ := busData)
-    io.memOut := busData
 
-    switch(busData.busTransaction) {
-      is(BusRd) {
-        val flush = io.l1CachesIn.map { l1 =>
-          busData.pid =/= l1.pid &&
-            l1.valid &&
-            l1.addr === busData.addr &&
-            l1.busTransaction === Flush
-        }.reduce(_ || _)
-        when(!flush) {
+  printf("bus: Stage 1\n")
+  when(memHold || flushHold) {
+    printf("bus: Stage 2\n")
+    when(memHold && memData.valid && busData.valid && memData.addr === busData.addr) {
+      printf("bus: Stage 3\n")
+      when(memData.busTransaction === BusUpgrade) {
+        memHold := false.B
+        memWen := false.B
+      }.otherwise {
+        when(memHoldFlag) {
           busData := memData
+          memHold := false.B
+          memHoldFlag := false.B
+        }.otherwise {
+          memHoldFlag := true.B
         }
       }
-      is(Flush) {
-        when(busData.state === Modified) {
-          io.memWen := true.B
+    }
+    when(flushHold) {
+      printf("bus: Stage 4\n")
+      flushHold := false.B
+      val flushFlag = io.l1CachesIn.map { l1 =>
+        l1.valid &&
+          l1.addr === busData.addr &&
+          l1.busTransaction === Flush
+      }
+      printf("bus: flushFlag (%d, %d, %d, %d)\n",
+        flushFlag(0), flushFlag(1), flushFlag(2), flushFlag(3))
+      when(!flushFlag.reduce(_ || _)) {
+        printf("bus: Stage 5\n")
+        memHold := true.B
+      }.otherwise {
+        printf("bus: Stage 6\n")
+        val tarPid = MuxCase(procNum.U(procNumBits.W),
+          flushFlag.zipWithIndex.map { flush =>
+            flush._1 -> flush._2.U(procNumBits.W)
+          })
+        printf("bus: TarPid: %d\n", tarPid)
+        when(tarPid =/= procNum.U(procNumBits.W)) {
+          printf("bus: Stage 7\n")
+          busData := io.l1CachesIn(tarPid)
+          when(io.l1CachesIn(tarPid).state === Modified) {
+            memWen := true.B
+          }
         }
       }
     }
   }.otherwise {
-    busData := 0.U.asTypeOf(new BusData)
-    io.memOut := 0.U.asTypeOf(new BusData)
-    io.l1CachesOut.foreach(_ := 0.U.asTypeOf(new BusData))
+    memWen := false.B
+    busData := io.l1CachesIn(pid)
+    when(valid) {
+      printf("bus: Stage 8\n")
+
+      when(busData.busTransaction === BusRd) {
+        printf("bus: Stage 9\n")
+        flushHold := true.B
+      }.elsewhen(busData.busTransaction === BusUpgrade) {
+        printf("bus: Stage 10\n")
+        memHold := true.B
+        memWen := true.B
+      }
+    }.otherwise {
+      printf("bus: Stage 11\n")
+      busData := 0.U.asTypeOf(new BusData)
+    }
   }
+  io.memOut := busData
+  io.l1CachesOut.foreach(_ := busData)
+  printf("bus: Hold: %d\n", memHold || flushHold)
 }

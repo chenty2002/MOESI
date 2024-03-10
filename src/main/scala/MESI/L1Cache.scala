@@ -2,8 +2,6 @@ package MESI
 
 import chisel3._
 import chisel3.util._
-import freechips.rocketchip.diplomacy.LazyModule
-import org.chipsalliance.cde.config.Parameters
 
 class L1Cache(val hostPid: UInt) extends Module with HasMESIParameters {
   val io = IO(new Bundle() {
@@ -21,22 +19,19 @@ class L1Cache(val hostPid: UInt) extends Module with HasMESIParameters {
     // the requests on the bus
     val busIn = Input(new BusData)
     val busOut = Output(new BusData)
+    val busHold = Input(new Bool)
 
-    // whether the bus is valid to read
-//    val busValid = Input(new Bool)
-//    val busPid = Input(UInt(procNumBits.W))
     // the cache needs to use the bus
     val validateBus = Output(new Bool)
-  })
 
+    // DEBUG info
+    val addrEq = Output(new Bool)
+    val cacheStatus = Output(Vec(cacheBlockNum, UInt(stateBits.W)))
+  })
   val prHlt = RegInit(false.B)
-  val cacheOutput = RegInit(0.U(cacheBlockBits.W))
+  val cacheOutput = WireDefault(0.U(cacheBlockBits.W))
   val busOut = RegInit(0.U.asTypeOf(new BusData))
   val validateBus = RegInit(false.B)
-
-  val memAddr = RegInit(0.U(addrBits.W))
-  val memWr = RegInit(0.U(cacheBlockBits.W))
-  val memWen = RegInit(false.B)
 
   io.prHlt := prHlt
   io.validateBus := validateBus
@@ -47,7 +42,7 @@ class L1Cache(val hostPid: UInt) extends Module with HasMESIParameters {
   val tagDirectory = RegInit(VecInit.fill(cacheBlockNum)(0.U(tagBits.W)))
   val cacheStatus = RegInit(VecInit.fill(cacheBlockNum)(Invalidated))
 
-  val (index, tag) = parseAddr(io.prAddr)
+  val (tag, index) = parseAddr(io.prAddr)
 
   // bus requests
   val guestId = io.busIn.pid
@@ -56,30 +51,69 @@ class L1Cache(val hostPid: UInt) extends Module with HasMESIParameters {
   val busIndex = io.busIn.index
   val busData = io.busIn.cacheBlock
   val busState = io.busIn.state
-  val busValid = io.busIn.valid && guestId =/= 0.U
+  val busValid = io.busIn.valid
+  val busAddr = io.busIn.addr
+
+  // DEBUG info
+  printf("pid %d: BusData\n " +
+    "\t\tpid: %d\n " +
+    "\t\ttag: %d\n " +
+    "\t\ttrans: %d\n " +
+    "\t\tindex: %d\n " +
+    "\t\tdata: %d\n " +
+    "\t\tstate: %d\n " +
+    "\t\tvalid: %d\n" +
+    "\t\taddr: %d\n",
+    hostPid,
+    guestId,
+    busTag,
+    busTrans,
+    busIndex,
+    busData,
+    busState,
+    busValid,
+    busAddr)
+
+  io.addrEq := busAddr === io.prAddr
+  io.cacheStatus := cacheStatus
 
   // whether the address hits
   def isHit(t: UInt, i: UInt): Bool = {
     cacheStatus(i) =/= Invalidated && tagDirectory(index) === t
   }
 
-  when(guestId === hostPid && busValid) {
-    validateBus := false.B
-    busOut := 0.U.asTypeOf(new BusData)
-    when(busTrans === BusUpgrade || busTrans === BusRdX) {
-      cacheStatus(index) := Modified
-      prHlt := false.B
+  // DEBUG info
+  def printStatus(i: UInt, status: UInt) = {
+    switch(status) {
+      is(Invalidated) {
+        printf("pid %d: cacheStatus(%d) -> Invalidated\n", hostPid, i)
+      }
+      is(Shared) {
+        printf("pid %d: cacheStatus(%d) -> Shared\n", hostPid, i)
+      }
+      is(Exclusive) {
+        printf("pid %d: cacheStatus(%d) -> Exclusive\n", hostPid, i)
+      }
+      is(Modified) {
+        printf("pid %d: cacheStatus(%d) -> Modified\n", hostPid, i)
+      }
     }
   }
 
+  printf("pid %d: Stage 1\n", hostPid)
+
   // the request from the bus is from another processor and it hits a block
-  when(guestId =/= hostPid && isHit(busTag, busIndex) && busValid) {
-    switch(cacheStatus(busIndex)) {
-      is(Modified) { // dirty
-        switch(busTrans) {
-          is(BusRd) {
+  when(guestId =/= hostPid && busValid && !io.busHold) {
+    printf("pid %d: Stage 2\n", hostPid)
+    when(isHit(busTag, busIndex)) {
+      switch(cacheStatus(busIndex)) {
+        is(Modified) { // dirty
+          printf("pid %d: Stage 3\n", hostPid)
+          when(busTrans === BusRd) {
+            printf("pid %d: Stage 4\n", hostPid)
             // invalidated cache reading a modified cache
             cacheStatus(busIndex) := Shared
+            printStatus(busIndex, Shared)
             busOut.pid := hostPid
             busOut.busTransaction := Flush
             busOut.tag := busTag
@@ -88,19 +122,20 @@ class L1Cache(val hostPid: UInt) extends Module with HasMESIParameters {
             busOut.state := Modified
             busOut.valid := true.B
 
-            validateBus := true.B
-          }
-          is(BusRdX) {
+//            validateBus := true.B
+          }.elsewhen(busTrans === BusRdX) {
+            printf("pid %d: Stage 5\n", hostPid)
             // invalidated cache writing a modified cache
             cacheStatus(busIndex) := Invalidated
-            validateBus := false.B
+            printStatus(busIndex, Invalidated)
           }
         }
-      }
-      is(Exclusive) { // clean
-        switch(busTrans) {
-          is(BusRd) {
+        is(Exclusive) { // clean
+          printf("pid %d: Stage 6\n", hostPid)
+          when(busTrans === BusRd) {
+            printf("pid %d: Stage 7\n", hostPid)
             cacheStatus(busIndex) := Shared
+            printStatus(busIndex, Shared)
             busOut.pid := hostPid
             busOut.busTransaction := Flush
             busOut.tag := busTag
@@ -109,17 +144,17 @@ class L1Cache(val hostPid: UInt) extends Module with HasMESIParameters {
             busOut.state := Exclusive
             busOut.valid := true.B
 
-            validateBus := true.B
-          }
-          is(BusRdX) {
+//            validateBus := true.B
+          }.elsewhen(busTrans === BusRdX) {
+            printf("pid %d: Stage 8\n", hostPid)
             cacheStatus(busIndex) := Invalidated
-            validateBus := false.B
+            printStatus(busIndex, Invalidated)
           }
         }
-      }
-      is(Shared) { // clean
-        switch(busTrans) {
-          is(BusRd) {
+        is(Shared) { // clean
+          printf("pid %d: Stage 9\n", hostPid)
+          when(busTrans === BusRd) {
+            printf("pid %d: Stage 10\n", hostPid)
             // response for a read request
             busOut.pid := hostPid
             busOut.busTransaction := Flush
@@ -129,177 +164,193 @@ class L1Cache(val hostPid: UInt) extends Module with HasMESIParameters {
             busOut.state := Shared
             busOut.valid := true.B
 
-            validateBus := true.B
-          }
-          is(BusRdX) {
+//            validateBus := true.B
+          }.elsewhen(busTrans === BusRdX) {
+            printf("pid %d: Stage 11\n", hostPid)
             // invalidated cache reading shared cache
             cacheStatus(busIndex) := Invalidated
-            validateBus := false.B
-          }
-          is(BusUpgrade) {
+            printStatus(busIndex, Invalidated)
+          }.elsewhen(busTrans === BusUpgrade) {
+            printf("pid %d: Stage 12\n", hostPid)
             // shared cache writing shared cache
             cacheStatus(busIndex) := Invalidated
-            validateBus := false.B
-          }
-          is(Flush) {
+            printStatus(busIndex, Invalidated)
+          }.elsewhen(busTrans === Flush) {
             // multiple shared caches give the same response
-            // the bus chooses another shared cache, cancel this response
+            // the bus chooses one of the shared caches, cancel this response
             when(busData === L1Cache(busIndex)) {
-              validateBus := false.B
+              printf("pid %d: Stage 13\n", hostPid)
+//              validateBus := false.B
+              busOut := 0.U.asTypeOf(new BusData)
             }
           }
         }
       }
-      is(Invalidated) {
-        when(prHlt) {
-          switch(busTrans) {
-            is(Flush) {
-              prHlt := false.B
-              switch(io.procOp) {
-                is(PrRd) {
-                  L1Cache(busIndex) := busData
-                  cacheOutput := L1Cache(busIndex)
-                  cacheStatus(index) := Shared
-                }
-              }
-            }
-            is(Fill) {
-              prHlt := false.B
-              switch(io.procOp) {
-                is(PrRd) {
-                  L1Cache(busIndex) := busData
-                  cacheOutput := L1Cache(busIndex)
-                  cacheStatus(index) := Exclusive
-                }
-              }
-            }
-          }
+      // the request from the bus is from another processor but it does not hit a block
+    }.elsewhen(prHlt && busAddr === io.prAddr) {
+      printf("pid %d: Stage 14\n", hostPid)
+      when(busTrans === Flush) {
+        printf("pid %d: Stage 15\n", hostPid)
+        prHlt := false.B
+        when(io.procOp === PrRd) {
+          printf("pid %d: Stage 16\n", hostPid)
+          L1Cache(busIndex) := busData
+          printf("pid %d: L1Cache(%d) -> %d\n", hostPid, busIndex, busData)
+          tagDirectory(index) := busTag
+          cacheOutput := L1Cache(busIndex)
+          cacheStatus(index) := Shared
+          printStatus(busIndex, Shared)
+        }
+      }.elsewhen(busTrans === Fill) {
+        printf("pid %d: Stage 17\n", hostPid)
+        prHlt := false.B
+        when(io.procOp === PrRd) {
+          printf("pid %d: Stage 18\n", hostPid)
+          L1Cache(busIndex) := busData
+          printf("pid %d: L1Cache(%d) -> %d\n", hostPid, busIndex, busData)
+          tagDirectory(index) := busTag
+          cacheOutput := L1Cache(busIndex)
+          cacheStatus(index) := Exclusive
+          printStatus(busIndex, Exclusive)
         }
       }
     }
-    // the request from the bus is from another processor but it does not hit a block
   }
-//    .elsewhen(guestId =/= hostPid && !isHit(busTag, busIndex) && busValid) {
-//    when(prHlt) {
-//      switch(busTrans) {
-//        is(Flush) {
-//          prHlt := false.B
-//          switch(io.procOp) {
-//            is(PrRd) {
-//              L1Cache(busIndex) := busData
-//              tagDirectory(index) := busTag
-//              cacheOutput := L1Cache(busIndex)
-//              cacheStatus(index) := Shared
-//            }
-//            is(PrWr) {
-//              L1Cache(busIndex) := io.cacheInput
-//              tagDirectory(index) := busTag
-//              cacheStatus(index) := Modified
-//            }
-//          }
-//        }
-//      }
-//    }
-//  }
 
   // processor requests
-//  val invalidStateCounter = RegInit(0.U((procNumBits+1).W))
-
-  // the request from the processor hits
-  when(isHit(tag, index)) {
-    switch(cacheStatus(index)) {
-      is(Modified) {
-        switch(io.procOp) {
-          is(PrRd) {
-            cacheOutput := L1Cache(index)
-          }
-          is(PrWr) {
-            L1Cache(index) := io.cacheInput
-            tagDirectory(index) := tag
-          }
-        }
+  printf("pid %d: prHlt: %d\n", hostPid, prHlt)
+  when(guestId === hostPid && busValid && prHlt) {
+    printf("pid %d: Stage 19\n", hostPid)
+    validateBus := false.B
+    busOut := 0.U.asTypeOf(new BusData)
+    when(busTrans === BusUpgrade || busTrans === BusRdX) {
+      printf("pid %d: Stage 20\n", hostPid)
+      when(busTrans === BusUpgrade) {
+        cacheStatus(index) := Exclusive
+        printStatus(busIndex, Exclusive)
+      }.otherwise {
+        cacheStatus(index) := Modified
+        printStatus(busIndex, Modified)
       }
-      is(Exclusive) {
-        switch(io.procOp) {
-          is(PrRd) {
-            cacheOutput := L1Cache(index)
-          }
-          is(PrWr) {
-            L1Cache(index) := io.cacheInput
-            tagDirectory(index) := tag
-            cacheStatus(index) := Modified
-          }
-        }
-      }
-      is(Shared) {
-        switch(io.procOp) {
-          is(PrRd) {
-            cacheOutput := L1Cache(index)
-          }
-          is(PrWr) {
-            busOut.pid := hostPid
-            busOut.busTransaction := BusUpgrade
-            busOut.tag := tag
-            busOut.index := index
-            busOut.valid := true.B
-            busOut.state := Shared
-            validateBus := true.B
-
-            prHlt := true.B
-          }
-        }
-      }
-      is(Invalidated) {
-        switch(io.procOp) {
-          is(PrRd) {
-            busOut.pid := hostPid
-            busOut.busTransaction := BusRd
-            busOut.tag := tag
-            busOut.index := index
-            busOut.valid := true.B
-            busOut.state := Invalidated
-            validateBus := true.B
-
-            prHlt := true.B
-          }
-          is(PrWr) {
-            busOut.pid := hostPid
-            busOut.busTransaction := BusRdX
-            busOut.tag := tag
-            busOut.index := index
-            busOut.valid := true.B
-            busOut.state := Invalidated
-            validateBus := true.B
-
-            prHlt := true.B
-          }
-        }
-      }
+      tagDirectory(index) := tag
+      L1Cache(index) := busData
+      printf("pid %d: L1Cache(%d) -> %d\n", hostPid, index, busData)
+      prHlt := false.B
     }
-    // the address does not hit
-  }.otherwise {
-    switch(io.procOp) {
-      is(PrRd) {
-        busOut.pid := hostPid
-        busOut.busTransaction := BusRd
-        busOut.tag := tag
-        busOut.index := index
-        busOut.valid := true.B
-        busOut.state := Invalidated
-        validateBus := true.B
+  }.elsewhen(!prHlt) {
+    printf("pid %d: Stage 21\n", hostPid)
+    // the request from the processor hits
+    when(isHit(tag, index)) {
+      switch(cacheStatus(index)) {
+        is(Modified) {
+          switch(io.procOp) {
+            is(PrRd) {
+              printf("pid %d: Stage 22\n", hostPid)
+              cacheOutput := L1Cache(index)
+            }
+            is(PrWr) {
+              printf("pid %d: Stage 23\n", hostPid)
+              L1Cache(index) := io.cacheInput
+              printf("pid %d: L1Cache(%d) -> %d\n", hostPid, index, io.cacheInput)
+              tagDirectory(index) := tag
+            }
+          }
+        }
+        is(Exclusive) {
+          switch(io.procOp) {
+            is(PrRd) {
+              printf("pid %d: Stage 24\n", hostPid)
+              cacheOutput := L1Cache(index)
+            }
+            is(PrWr) {
+              printf("pid %d: Stage 25\n", hostPid)
+              L1Cache(index) := io.cacheInput
+              printf("pid %d: L1Cache(%d) -> %d\n", hostPid, index, io.cacheInput)
+              tagDirectory(index) := tag
+              cacheStatus(index) := Modified
+              printStatus(busIndex, Modified)
+            }
+          }
+        }
+        is(Shared) {
+          switch(io.procOp) {
+            is(PrRd) {
+              printf("pid %d: Stage 26\n", hostPid)
+              cacheOutput := L1Cache(index)
+            }
+            is(PrWr) {
+              printf("pid %d: Stage 27\n", hostPid)
+              busOut.pid := hostPid
+              busOut.busTransaction := BusUpgrade
+              busOut.tag := tag
+              busOut.index := index
+              busOut.valid := true.B
+              busOut.state := Shared
+              busOut.cacheBlock := io.cacheInput
+              validateBus := true.B
 
-        prHlt := true.B
+              prHlt := true.B
+            }
+          }
+        }
+        is(Invalidated) {
+          switch(io.procOp) {
+            is(PrRd) {
+              printf("pid %d: Stage 28\n", hostPid)
+              busOut.pid := hostPid
+              busOut.busTransaction := BusRd
+              busOut.tag := tag
+              busOut.index := index
+              busOut.valid := true.B
+              busOut.state := Invalidated
+              validateBus := true.B
+
+              prHlt := true.B
+            }
+            is(PrWr) {
+              printf("pid %d: Stage 29\n", hostPid)
+              busOut.pid := hostPid
+              busOut.busTransaction := BusRdX
+              busOut.tag := tag
+              busOut.index := index
+              busOut.valid := true.B
+              busOut.state := Invalidated
+              busOut.cacheBlock := io.cacheInput
+              validateBus := true.B
+
+              prHlt := true.B
+            }
+          }
+        }
       }
-      is(PrWr) {
-        busOut.pid := hostPid
-        busOut.busTransaction := BusRdX
-        busOut.tag := tag
-        busOut.index := index
-        busOut.valid := true.B
-        busOut.state := Invalidated
-        validateBus := true.B
+      // the address does not hit
+    }.otherwise {
+      switch(io.procOp) {
+        is(PrRd) {
+          printf("pid %d: Stage 30\n", hostPid)
+          busOut.pid := hostPid
+          busOut.busTransaction := BusRd
+          busOut.tag := tag
+          busOut.index := index
+          busOut.valid := true.B
+          busOut.state := Invalidated
+          validateBus := true.B
 
-        prHlt := true.B
+          prHlt := true.B
+        }
+        is(PrWr) {
+          printf("pid %d: Stage 31\n", hostPid)
+          busOut.pid := hostPid
+          busOut.busTransaction := BusRdX
+          busOut.tag := tag
+          busOut.index := index
+          busOut.valid := true.B
+          busOut.state := Invalidated
+          busOut.cacheBlock := io.cacheInput
+          validateBus := true.B
+
+          prHlt := true.B
+        }
       }
     }
   }
