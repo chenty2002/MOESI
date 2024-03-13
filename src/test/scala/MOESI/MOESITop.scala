@@ -1,9 +1,9 @@
-package MESI
+package MOESI
 
 import chisel3._
 import chisel3.stage.ChiselStage
 
-class MESITop() extends Module with HasMESIParameters {
+class MOESITop() extends Module with HasMESIParameters {
   /*
   proc0   proc1   proc2   proc3
     |       |       |       |
@@ -69,6 +69,6 @@ class MESITop() extends Module with HasMESIParameters {
   io.memAddr := mem.io.memAddr
 }
 
-object MESITop extends App {
-  (new ChiselStage).emitVerilog(new MESITop(), Array("--target-dir", "generated/MESI"))
+object MOESITop extends App {
+  (new ChiselStage).emitVerilog(new MOESITop(), Array("--target-dir", "generated/MOESI"))
 }
