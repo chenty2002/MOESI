@@ -122,7 +122,7 @@ class L1Cache(val hostPid: UInt) extends Module with HasMESIParameters {
             busOut.state := Modified
             busOut.valid := true.B
 
-//            validateBus := true.B
+            //            validateBus := true.B
           }.elsewhen(busTrans === BusRdX) {
             printf("pid %d: Stage 5\n", hostPid)
             // invalidated cache writing a modified cache
@@ -144,7 +144,7 @@ class L1Cache(val hostPid: UInt) extends Module with HasMESIParameters {
             busOut.state := Exclusive
             busOut.valid := true.B
 
-//            validateBus := true.B
+            //            validateBus := true.B
           }.elsewhen(busTrans === BusRdX) {
             printf("pid %d: Stage 8\n", hostPid)
             cacheStatus(busIndex) := Invalidated
@@ -164,7 +164,7 @@ class L1Cache(val hostPid: UInt) extends Module with HasMESIParameters {
             busOut.state := Shared
             busOut.valid := true.B
 
-//            validateBus := true.B
+            //            validateBus := true.B
           }.elsewhen(busTrans === BusRdX) {
             printf("pid %d: Stage 11\n", hostPid)
             // invalidated cache reading shared cache
@@ -180,7 +180,7 @@ class L1Cache(val hostPid: UInt) extends Module with HasMESIParameters {
             // the bus chooses one of the shared caches, cancel this response
             when(busData === L1Cache(busIndex)) {
               printf("pid %d: Stage 13\n", hostPid)
-//              validateBus := false.B
+              //              validateBus := false.B
               busOut := 0.U.asTypeOf(new BusData)
             }
           }

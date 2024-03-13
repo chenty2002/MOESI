@@ -1,4 +1,4 @@
-package MESI
+package MESI_Diplomacy
 
 import chisel3._
 import chisel3.util._

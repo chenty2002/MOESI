@@ -1,7 +1,6 @@
 package MESI
 
 import chisel3._
-import chisel3.util._
 
 class BusData extends Bundle with HasMESIParameters {
   val pid = UInt(procNumBits.W)

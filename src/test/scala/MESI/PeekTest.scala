@@ -7,7 +7,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 
 class PeekTest extends AnyFlatSpec with ChiselScalatestTester with HasMESIParameters {
   def pokeProc(mesi: MESITop, procOp: Seq[Int], addr: Seq[Int], data: Seq[Int] = Seq.fill(4)(0)) = {
-    for(i <- 0 until procNum) {
+    for (i <- 0 until procNum) {
       if (procOp(i) != 0) {
         mesi.io.procOp(i).poke(procOp(i).U(procOpBits.W))
         mesi.io.addr(i).poke(addr(i).U(addrBits.W))
@@ -292,9 +292,9 @@ class PeekTest extends AnyFlatSpec with ChiselScalatestTester with HasMESIParame
           s"\t\tvalid: ${mesi.io.busData.valid.peekBoolean()}")
       } while (mesi.io.procHlt(1).peekBoolean())
 
-//      println("---------------------------------------------------")
-//      pokeProc(mesi, Seq(0,0,0,0), Seq(0,0,0,0))
-//      mesi.clock.step()
+      //      println("---------------------------------------------------")
+      //      pokeProc(mesi, Seq(0,0,0,0), Seq(0,0,0,0))
+      //      mesi.clock.step()
       step = 0
       do {
         pokeProc(mesi, Seq(0, 0, 1, 0), Seq(0, 0, 1, 0))

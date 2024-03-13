@@ -1,4 +1,4 @@
-package MESI
+package MESI_Diplomacy
 
 import chisel3._
 import chisel3.util._
@@ -24,25 +24,6 @@ trait HasMESIParameters {
 
   val procNum: Int = 4
   val procNumBits = log2Up(procNum + 1)
-  val tagBits: Int = 2
-  val indexBits: Int = 2
   val cacheBlockNum: Int = 4
   val cacheBlockNumBits = log2Up(cacheBlockNum)
-  val cacheBlockBits: Int = 8
-
-  val addrBits: Int = tagBits + indexBits
-
-  def parseAddr(addr: UInt): (UInt, UInt) = {
-    val indexStart = 0
-    val indexEnd = indexStart + indexBits - 1
-    val index = addr(indexEnd, indexStart)
-    val tagStart = indexEnd
-    val tagEnd = tagStart + tagBits - 1
-    val tag = addr(tagEnd, tagStart)
-    (tag, index)
-  }
-
-  def getAddr(index: UInt, tag: UInt): UInt = {
-    Cat(tag, index)
-  }
 }

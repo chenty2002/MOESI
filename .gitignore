@@ -7,4 +7,5 @@
 out
 gen
 rocket-chip
-Verilog
+generated
+test_run_dir
