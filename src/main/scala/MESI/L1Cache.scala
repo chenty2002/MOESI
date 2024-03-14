@@ -82,6 +82,30 @@ class L1Cache(val hostPid: UInt) extends Module with HasMESIParameters {
     cacheStatus(i) =/= Invalidated && tagDirectory(index) === t
   }
 
+  def fillBus(trans: UInt, t: UInt, ix: UInt, ste: UInt): Unit = {
+    fillBus(trans, t, ix, L1Cache(ix), ste)
+  }
+
+  def fillBus(trans: UInt, t: UInt, ix: UInt, block: UInt, ste: UInt): Unit = {
+    busOut.pid := hostPid
+    busOut.busTransaction := trans
+    busOut.tag := t
+    busOut.index := ix
+    busOut.cacheBlock := block
+    busOut.state := ste
+    busOut.valid := true.B
+  }
+
+  def fillBus(trans: UInt, oBundle: BusData, ste: UInt): Unit = {
+    fillBus(
+      trans,
+      oBundle.tag,
+      oBundle.index,
+      L1Cache(oBundle.index),
+      ste
+    )
+  }
+
   // DEBUG info
   def printStatus(i: UInt, status: UInt) = {
     switch(status) {
@@ -114,13 +138,7 @@ class L1Cache(val hostPid: UInt) extends Module with HasMESIParameters {
             // invalidated cache reading a modified cache
             cacheStatus(busIndex) := Shared
             printStatus(busIndex, Shared)
-            busOut.pid := hostPid
-            busOut.busTransaction := Flush
-            busOut.tag := busTag
-            busOut.index := busIndex
-            busOut.cacheBlock := L1Cache(busIndex)
-            busOut.state := Modified
-            busOut.valid := true.B
+            fillBus(Flush, io.busIn, Modified)
 
             //            validateBus := true.B
           }.elsewhen(busTrans === BusRdX) {
@@ -136,13 +154,7 @@ class L1Cache(val hostPid: UInt) extends Module with HasMESIParameters {
             printf("pid %d: Stage 7\n", hostPid)
             cacheStatus(busIndex) := Shared
             printStatus(busIndex, Shared)
-            busOut.pid := hostPid
-            busOut.busTransaction := Flush
-            busOut.tag := busTag
-            busOut.index := busIndex
-            busOut.cacheBlock := L1Cache(busIndex)
-            busOut.state := Exclusive
-            busOut.valid := true.B
+            fillBus(Flush, io.busIn, Exclusive)
 
             //            validateBus := true.B
           }.elsewhen(busTrans === BusRdX) {
@@ -156,13 +168,7 @@ class L1Cache(val hostPid: UInt) extends Module with HasMESIParameters {
           when(busTrans === BusRd) {
             printf("pid %d: Stage 10\n", hostPid)
             // response for a read request
-            busOut.pid := hostPid
-            busOut.busTransaction := Flush
-            busOut.tag := busTag
-            busOut.index := busIndex
-            busOut.cacheBlock := L1Cache(busIndex)
-            busOut.state := Shared
-            busOut.valid := true.B
+            fillBus(Flush, io.busIn, Shared)
 
             //            validateBus := true.B
           }.elsewhen(busTrans === BusRdX) {
@@ -280,42 +286,7 @@ class L1Cache(val hostPid: UInt) extends Module with HasMESIParameters {
             }
             is(PrWr) {
               printf("pid %d: Stage 27\n", hostPid)
-              busOut.pid := hostPid
-              busOut.busTransaction := BusUpgrade
-              busOut.tag := tag
-              busOut.index := index
-              busOut.valid := true.B
-              busOut.state := Shared
-              busOut.cacheBlock := io.cacheInput
-              validateBus := true.B
-
-              prHlt := true.B
-            }
-          }
-        }
-        is(Invalidated) {
-          switch(io.procOp) {
-            is(PrRd) {
-              printf("pid %d: Stage 28\n", hostPid)
-              busOut.pid := hostPid
-              busOut.busTransaction := BusRd
-              busOut.tag := tag
-              busOut.index := index
-              busOut.valid := true.B
-              busOut.state := Invalidated
-              validateBus := true.B
-
-              prHlt := true.B
-            }
-            is(PrWr) {
-              printf("pid %d: Stage 29\n", hostPid)
-              busOut.pid := hostPid
-              busOut.busTransaction := BusRdX
-              busOut.tag := tag
-              busOut.index := index
-              busOut.valid := true.B
-              busOut.state := Invalidated
-              busOut.cacheBlock := io.cacheInput
+              fillBus(BusUpgrade, tag, index, io.cacheInput, Shared)
               validateBus := true.B
 
               prHlt := true.B
@@ -327,26 +298,15 @@ class L1Cache(val hostPid: UInt) extends Module with HasMESIParameters {
     }.otherwise {
       switch(io.procOp) {
         is(PrRd) {
-          printf("pid %d: Stage 30\n", hostPid)
-          busOut.pid := hostPid
-          busOut.busTransaction := BusRd
-          busOut.tag := tag
-          busOut.index := index
-          busOut.valid := true.B
-          busOut.state := Invalidated
+          printf("pid %d: Stage 28\n", hostPid)
+          fillBus(BusRd, tag, index, 0.U, Invalidated)
           validateBus := true.B
 
           prHlt := true.B
         }
         is(PrWr) {
-          printf("pid %d: Stage 31\n", hostPid)
-          busOut.pid := hostPid
-          busOut.busTransaction := BusRdX
-          busOut.tag := tag
-          busOut.index := index
-          busOut.valid := true.B
-          busOut.state := Invalidated
-          busOut.cacheBlock := io.cacheInput
+          printf("pid %d: Stage 29\n", hostPid)
+          fillBus(BusRdX, tag, index, io.cacheInput, Shared)
           validateBus := true.B
 
           prHlt := true.B

@@ -168,7 +168,6 @@ class L1Cache(val hostPid: UInt, val ps: MESIPS)(implicit p: Parameters) extends
             when(busTrans === BusRd) {
               printf("pid %d: Stage 10\n", hostPid)
               // response for a read request
-              busOut.pid := hostPid
               fillBus(Flush, busI, Shared)
 
               //            validateBus := true.B
@@ -299,14 +298,14 @@ class L1Cache(val hostPid: UInt, val ps: MESIPS)(implicit p: Parameters) extends
       }.otherwise {
         switch(io.procOp) {
           is(PrRd) {
-            printf("pid %d: Stage 30\n", hostPid)
+            printf("pid %d: Stage 28\n", hostPid)
             fillBus(BusRd, tag, index, 0.U, Invalidated)
             validateBus := true.B
 
             prHlt := true.B
           }
           is(PrWr) {
-            printf("pid %d: Stage 31\n", hostPid)
+            printf("pid %d: Stage 29\n", hostPid)
             fillBus(BusUpgrade, tag, index, io.cacheInput, Shared)
             validateBus := true.B
 
