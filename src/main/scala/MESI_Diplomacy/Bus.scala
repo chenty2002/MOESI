@@ -1,5 +1,6 @@
 package MESI_Diplomacy
 
+import Util.RoundRobinArbiter
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.diplomacy._
@@ -24,7 +25,7 @@ class Bus(implicit p: Parameters) extends LazyModule with HasMESIParameters {
 
     val memIn = busUNode.map(_.in.head._1.busData)
 
-    val arbiter = Module(new Arb(procNum))
+    val arbiter = Module(new RoundRobinArbiter(procNum))
     arbiter.io.requests := validateBus
 
     val valid = validateBus.reduce(_ || _)

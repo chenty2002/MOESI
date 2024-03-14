@@ -5,7 +5,7 @@ import chiseltest._
 import org.scalatest.flatspec.AnyFlatSpec
 
 
-class PeekTest extends AnyFlatSpec with ChiselScalatestTester with HasMESIParameters {
+class PeekTest extends AnyFlatSpec with ChiselScalatestTester with HasMOESIParameters {
   def pokeProc(moesi: MOESITop, procOp: Seq[Int], addr: Seq[Int], data: Seq[Int] = Seq.fill(4)(0)) = {
     for (i <- 0 until procNum) {
       if (procOp(i) != 0) {

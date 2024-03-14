@@ -1,9 +1,9 @@
-package MOESI_Diplomacy
+package Util
 
 import chisel3._
 import chisel3.util._
 
-class Arb(val grantN: Int) extends Module {
+class RoundRobinArbiter(val grantN: Int) extends Module {
   val io = IO(new Bundle() {
     val requests = Input(Vec(grantN, new Bool))
     val grant = Output(Vec(grantN, new Bool))

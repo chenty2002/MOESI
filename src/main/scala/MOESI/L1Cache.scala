@@ -3,7 +3,7 @@ package MOESI
 import chisel3._
 import chisel3.util._
 
-class L1Cache(val hostPid: UInt) extends Module with HasMESIParameters {
+class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
   val io = IO(new Bundle() {
     // processor operations
     val procOp = Input(UInt(procOpBits.W))

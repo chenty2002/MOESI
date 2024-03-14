@@ -3,7 +3,7 @@ package MOESI
 import chisel3._
 import chisel3.util._
 
-class Memory extends Module with HasMESIParameters {
+class Memory extends Module with HasMOESIParameters {
   val io = IO(new Bundle() {
     val wen = Input(new Bool)
     val busIn = Input(new BusData)

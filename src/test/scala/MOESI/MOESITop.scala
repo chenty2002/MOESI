@@ -3,7 +3,7 @@ package MOESI
 import chisel3._
 import chisel3.stage.ChiselStage
 
-class MOESITop() extends Module with HasMESIParameters {
+class MOESITop() extends Module with HasMOESIParameters {
   /*
   proc0   proc1   proc2   proc3
     |       |       |       |

@@ -6,7 +6,7 @@ import chisel3.stage.ChiselStage
 import freechips.rocketchip.diplomacy._
 import org.chipsalliance.cde.config.Parameters
 
-class MOESITop(implicit p: Parameters) extends LazyModule with HasMESIParameters {
+class MOESITop(implicit p: Parameters) extends LazyModule with HasMOESIParameters {
   /*
   proc0   proc1   proc2   proc3
     |       |       |       |

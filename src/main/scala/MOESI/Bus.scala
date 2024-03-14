@@ -1,9 +1,10 @@
 package MOESI
 
+import Util.RoundRobinArbiter
 import chisel3._
 import chisel3.util._
 
-class Bus extends Module with HasMESIParameters {
+class Bus extends Module with HasMOESIParameters {
   val io = IO(new Bundle() {
     val l1CachesIn = Input(Vec(procNum, new BusData))
     val l1CachesOut = Output(Vec(procNum, new BusData))
@@ -19,7 +20,7 @@ class Bus extends Module with HasMESIParameters {
     val valid = Output(new Bool)
   })
 
-  val arbiter = Module(new Arb(procNum))
+  val arbiter = Module(new RoundRobinArbiter(procNum))
   arbiter.io.requests := io.validateBus
 
   val valid = io.validateBus.reduce(_ || _)

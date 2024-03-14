@@ -2,7 +2,7 @@ package MOESI
 
 import chisel3._
 
-class BusData extends Bundle with HasMESIParameters {
+class BusData extends Bundle with HasMOESIParameters {
   val pid = UInt(procNumBits.W)
   val busTransaction = UInt(busTransBits.W)
   val tag = UInt(tagBits.W)
