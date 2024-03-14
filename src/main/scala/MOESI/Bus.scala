@@ -93,7 +93,7 @@ class Bus extends Module with HasMESIParameters {
       when(busData.busTransaction === BusRd) {
         printf("bus: Stage 9\n")
         flushHold := true.B
-      }.elsewhen(busData.busTransaction === BusUpgrade && busData.state === Shared) {
+      }.elsewhen(busData.busTransaction === BusUpgrade) {
         printf("bus: Stage 10\n")
         memHold := true.B
         memWen := true.B

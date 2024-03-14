@@ -472,8 +472,3 @@ class PeekTest extends AnyFlatSpec with ChiselScalatestTester with HasMESIParame
     }
   }
 }
-
-/*
-0 -> 1: inside l1, validateBus = true
-1 -> 2: busDate updated by l1(0), memData read with busData
- */
