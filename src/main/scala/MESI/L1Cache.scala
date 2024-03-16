@@ -306,7 +306,7 @@ class L1Cache(val hostPid: UInt) extends Module with HasMESIParameters {
         }
         is(PrWr) {
           printf("pid %d: Stage 29\n", hostPid)
-          fillBus(BusRdX, tag, index, io.cacheInput, Shared)
+          fillBus(BusRdX, tag, index, io.cacheInput, Invalidated)
           validateBus := true.B
 
           prHlt := true.B

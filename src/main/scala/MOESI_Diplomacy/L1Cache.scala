@@ -339,7 +339,7 @@ class L1Cache(val hostPid: UInt, val ps: MESIPS)(implicit p: Parameters) extends
           }
           is(PrWr) {
             printf("pid %d: Stage 34\n", hostPid)
-            fillBus(BusUpgrade, tag, index, io.cacheInput, Shared)
+            fillBus(BusRdX, tag, index, io.cacheInput, Invalidated)
             validateBus := true.B
 
             prHlt := true.B

@@ -334,7 +334,7 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
         }
         is(PrWr) {
           printf("pid %d: Stage 34\n", hostPid)
-          fillBus(BusRdX, tag, index, io.cacheInput, Shared)
+          fillBus(BusRdX, tag, index, io.cacheInput, Invalidated)
           validateBus := true.B
 
           prHlt := true.B

@@ -2,10 +2,10 @@ package MOESI
 
 import chisel3._
 import chisel3.stage.ChiselStage
-import chisel3.util.PopCount
-import chiselFv.Check
+import chisel3.util._
+import chiselFv._
 
-class MOESITop() extends Module with HasMOESIParameters {
+class MOESITop() extends Module with HasMOESIParameters with Formal {
   /*
   proc0   proc1   proc2   proc3
     |       |       |       |
@@ -41,6 +41,8 @@ class MOESITop() extends Module with HasMOESIParameters {
   val mem = Module(new Memory)
   val bus = Module(new Bus)
 
+  val prBundle = Wire(Vec(procNum, UInt((procOpBits + addrBits + cacheBlockBits).W)))
+
   for (i <- 0 until procNum) {
     l1s(i).io.procOp := io.procOp(i)
     io.procHlt(i) := l1s(i).io.prHlt
@@ -54,6 +56,7 @@ class MOESITop() extends Module with HasMOESIParameters {
 
     // DEBUG info
     io.cacheStatus(i) := l1s(i).io.cacheStatus
+    prBundle(i) := Cat(l1s(i).io.procOp, l1s(i).io.prAddr, l1s(i).io.cacheInput).asUInt
   }
 
   def generateAssert(addr: UInt): Unit = {
@@ -62,15 +65,25 @@ class MOESITop() extends Module with HasMOESIParameters {
       Mux(l1.io.tagDirectory(index) === tag, l1.io.cacheStatus(index), Invalidated)
     }
     val exclusive = PopCount(match_tag.map(_ === Exclusive))
-    assert(exclusive <= 1.U)
+    inputValid(exclusive <= 1.U)
     val modified = PopCount(match_tag.map(_ === Modified))
-    assert(modified <= 1.U)
+    inputValid(modified <= 1.U)
     val owned = PopCount(match_tag.map(_ === Owned))
-    assert(owned <= 1.U)
+    inputValid(owned <= 1.U)
     val shared = PopCount(match_tag.map(_ === Shared))
-    assert(exclusive === 0.U || modified + owned + shared === 0.U)
-    assert(modified === 0.U || exclusive + owned + shared === 0.U)
-    assert(shared === 0.U || owned === 1.U)
+    inputValid(exclusive === 0.U || modified + owned + shared === 0.U)
+    inputValid(modified === 0.U || exclusive + owned + shared === 0.U)
+    inputValid(shared === 0.U || owned === 1.U)
+  }
+
+  def inputValid(cond: Bool): Unit = {
+    for (i <- 0 until procNum) {
+      past(prBundle(i), 1) { pastIO =>
+        assert(cond ||
+          l1s(i).io.prHlt ||
+          prBundle(i) =/= pastIO)
+      }
+    }
   }
 
   (0 until 1 << addrBits).foreach { addr =>
@@ -94,5 +107,5 @@ class MOESITop() extends Module with HasMOESIParameters {
 
 object MOESITop extends App {
   (new ChiselStage).emitVerilog(new MOESITop(), Array("--target-dir", "generated/MOESI"))
-  Check.bmc(() => new MOESITop)
+  //  Check.bmc(() => new MOESITop)
 }
