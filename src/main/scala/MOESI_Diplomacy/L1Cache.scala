@@ -29,6 +29,9 @@ class L1Cache(val hostPid: UInt, val ps: MESIPS)(implicit p: Parameters) extends
       // the data requests
       val cacheOutput = Output(UInt(ep.cacheBlockBits.W))
       val cacheInput = Input(UInt(ep.cacheBlockBits.W))
+
+      val cacheStatus = Output(Vec(cacheBlockNum, UInt(stateBits.W)))
+      val tagDirectory = Output(Vec(cacheBlockNum, UInt(ep.tagBits.W)))
     })
 
     val prHlt = RegInit(false.B)
@@ -77,9 +80,12 @@ class L1Cache(val hostPid: UInt, val ps: MESIPS)(implicit p: Parameters) extends
       busValid,
       busAddr)
 
+    io.cacheStatus := cacheStatus
+    io.tagDirectory := tagDirectory
+
     // whether the address hits
     def isHit(t: UInt, i: UInt): Bool = {
-      cacheStatus(i) =/= Invalidated && tagDirectory(index) === t
+      cacheStatus(i) =/= Invalidated && tagDirectory(i) === t
     }
 
     def fillBus(trans: UInt, t: UInt, ix: UInt, ste: UInt): Unit = {

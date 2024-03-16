@@ -2,6 +2,8 @@ package MOESI
 
 import chisel3._
 import chisel3.stage.ChiselStage
+import chisel3.util.PopCount
+import chiselFv.Check
 
 class MOESITop() extends Module with HasMOESIParameters {
   /*
@@ -54,6 +56,27 @@ class MOESITop() extends Module with HasMOESIParameters {
     io.cacheStatus(i) := l1s(i).io.cacheStatus
   }
 
+  def generateAssert(addr: UInt): Unit = {
+    val (tag, index) = parseAddr(addr)
+    val match_tag = l1s.map { l1 =>
+      Mux(l1.io.tagDirectory(index) === tag, l1.io.cacheStatus(index), Invalidated)
+    }
+    val exclusive = PopCount(match_tag.map(_ === Exclusive))
+    assert(exclusive <= 1.U)
+    val modified = PopCount(match_tag.map(_ === Modified))
+    assert(modified <= 1.U)
+    val owned = PopCount(match_tag.map(_ === Owned))
+    assert(owned <= 1.U)
+    val shared = PopCount(match_tag.map(_ === Shared))
+    assert(exclusive === 0.U || modified + owned + shared === 0.U)
+    assert(modified === 0.U || exclusive + owned + shared === 0.U)
+    assert(shared === 0.U || owned === 1.U)
+  }
+
+  (0 until 1 << addrBits).foreach { addr =>
+    generateAssert(addr.U(addrBits.W))
+  }
+
   bus.io.memIn := mem.io.busResp
   mem.io.busIn := bus.io.memOut
   mem.io.wen := bus.io.memWen
@@ -71,4 +94,5 @@ class MOESITop() extends Module with HasMOESIParameters {
 
 object MOESITop extends App {
   (new ChiselStage).emitVerilog(new MOESITop(), Array("--target-dir", "generated/MOESI"))
+  Check.bmc(() => new MOESITop)
 }

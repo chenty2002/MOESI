@@ -79,7 +79,7 @@ class L1Cache(val hostPid: UInt) extends Module with HasMESIParameters {
 
   // whether the address hits
   def isHit(t: UInt, i: UInt): Bool = {
-    cacheStatus(i) =/= Invalidated && tagDirectory(index) === t
+    cacheStatus(i) =/= Invalidated && tagDirectory(i) === t
   }
 
   def fillBus(trans: UInt, t: UInt, ix: UInt, ste: UInt): Unit = {

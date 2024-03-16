@@ -27,6 +27,7 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
     // DEBUG info
     val addrEq = Output(new Bool)
     val cacheStatus = Output(Vec(cacheBlockNum, UInt(stateBits.W)))
+    val tagDirectory = Output(Vec(cacheBlockNum, UInt(tagBits.W)))
   })
   val prHlt = RegInit(false.B)
   val cacheOutput = WireDefault(0.U(cacheBlockBits.W))
@@ -76,10 +77,11 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
 
   io.addrEq := busAddr === io.prAddr
   io.cacheStatus := cacheStatus
+  io.tagDirectory := tagDirectory
 
   // whether the address hits
   def isHit(t: UInt, i: UInt): Bool = {
-    cacheStatus(i) =/= Invalidated && tagDirectory(index) === t
+    cacheStatus(i) =/= Invalidated && tagDirectory(i) === t
   }
 
   def fillBus(trans: UInt, t: UInt, ix: UInt, ste: UInt): Unit = {
