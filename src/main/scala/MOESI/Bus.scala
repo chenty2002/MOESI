@@ -12,6 +12,8 @@ class Bus extends Module with HasMOESIParameters {
     val memIn = Input(new BusData)
     val memOut = Output(new BusData)
     val memWen = Output(new Bool)
+
+    val ackHold = Output(new Bool)
     val hold = Output(new Bool)
 
     val validateBus = Input(Vec(procNum, new Bool))
@@ -28,13 +30,15 @@ class Bus extends Module with HasMOESIParameters {
 
   val memHold = RegInit(false.B)
   val flushHold = RegInit(false.B)
+  val ackHold = RegInit(false.B)
   val busData = RegInit(0.U.asTypeOf(new BusData))
   val pid = OHToUInt(arbiter.io.grant)
   val memData = RegInit(0.U.asTypeOf(new BusData))
   val memWen = RegInit(false.B)
 
   val memHoldFlag = RegInit(false.B)
-  io.hold := memHold || flushHold
+  io.hold := memHold || flushHold || ackHold
+  io.ackHold := ackHold
 
   //  pid := io.pidIn
   //  io.pidOut := pid
@@ -42,8 +46,15 @@ class Bus extends Module with HasMOESIParameters {
   memData := io.memIn
 
   printf("bus: Stage 1\n")
-  when(memHold || flushHold) {
+  when(memHold || flushHold || ackHold) {
     printf("bus: Stage 2\n")
+    when(ackHold) {
+      when(busData.busTransaction === BusUpgrade || busData.busTransaction === BusRdX) {
+        when(io.l1CachesIn.map(_.busTransaction === Ack).reduce(_ || _)) {
+          ackHold := false.B
+        }
+      }
+    }
     when(memHold && memData.valid && busData.valid && memData.addr === busData.addr) {
       printf("bus: Stage 3\n")
       when(memData.busTransaction === BusUpgrade) {

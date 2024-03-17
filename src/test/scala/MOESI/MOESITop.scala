@@ -53,6 +53,7 @@ class MOESITop() extends Module with HasMOESIParameters with Formal {
     bus.io.l1CachesIn(i) := l1s(i).io.busOut
     bus.io.validateBus(i) := l1s(i).io.validateBus
     l1s(i).io.busHold := bus.io.hold
+    l1s(i).io.busAckHold := bus.io.ackHold
 
     // DEBUG info
     io.cacheStatus(i) := l1s(i).io.cacheStatus
@@ -80,7 +81,8 @@ class MOESITop() extends Module with HasMOESIParameters with Formal {
     for (i <- 0 until procNum) {
       past(prBundle(i), 1) { pastIO =>
         assert(cond ||
-          l1s(i).io.prHlt ||
+          l1s(i).io.procOp === 1.U ||
+          l1s(i).io.procOp === 2.U ||
           prBundle(i) =/= pastIO)
       }
     }
