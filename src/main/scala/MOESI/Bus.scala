@@ -32,11 +32,13 @@ class Bus extends Module with HasMOESIParameters {
   val flushHold = RegInit(false.B)
   val ackHold = RegInit(false.B)
   val busData = RegInit(0.U.asTypeOf(new BusData))
-  val pid = OHToUInt(arbiter.io.grant)
+  val pid = RegInit(0.U(procNumBits.W))
+  pid := OHToUInt(arbiter.io.grant)
   val memData = RegInit(0.U.asTypeOf(new BusData))
   val memWen = RegInit(false.B)
 
   val memHoldFlag = RegInit(false.B)
+  // indicating the bus is waiting for a response/ack from the memory/another cache
   io.hold := memHold || flushHold || ackHold
   io.ackHold := ackHold
 
@@ -48,6 +50,7 @@ class Bus extends Module with HasMOESIParameters {
   printf("bus: Stage 1\n")
   when(memHold || flushHold || ackHold) {
     printf("bus: Stage 2\n")
+    // waiting for the ack from other caches
     when(ackHold) {
       when(busData.busTransaction === BusUpgrade || busData.busTransaction === BusRdX) {
         when(io.l1CachesIn.map(_.busTransaction === Ack).reduce(_ || _)) {
@@ -55,6 +58,7 @@ class Bus extends Module with HasMOESIParameters {
         }
       }
     }
+    // waiting for the response from the memory
     when(memHold && memData.valid && busData.valid && memData.addr === busData.addr) {
       printf("bus: Stage 3\n")
       when(memData.busTransaction === BusUpgrade) {
@@ -62,7 +66,9 @@ class Bus extends Module with HasMOESIParameters {
         memWen := false.B
       }.otherwise {
         when(memHoldFlag) {
-          busData := memData
+          // copy the info of the memory (ignores pid because the response needs to correspond to the request)
+          busData.busTransaction := memData.busTransaction
+          busData.cacheBlock := memData.cacheBlock
           memHold := false.B
           memHoldFlag := false.B
         }.otherwise {
@@ -70,6 +76,7 @@ class Bus extends Module with HasMOESIParameters {
         }
       }
     }
+    // waiting for the response from other caches
     when(flushHold) {
       printf("bus: Stage 4\n")
       flushHold := false.B
@@ -85,6 +92,7 @@ class Bus extends Module with HasMOESIParameters {
         memHold := true.B
       }.otherwise {
         printf("bus: Stage 6\n")
+        // get the pid of the responded cache
         val tarPid = MuxCase(procNum.U(procNumBits.W),
           flushFlag.zipWithIndex.map { flush =>
             flush._1 -> flush._2.U(procNumBits.W)

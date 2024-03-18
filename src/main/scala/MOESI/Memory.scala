@@ -20,7 +20,7 @@ class Memory extends Module with HasMOESIParameters {
     io.memAddr := addr
     val wr = io.busIn.cacheBlock
     io.busResp := io.busIn
-    io.busResp.pid := procNum.U(procNumBits.W)
+//    io.busResp.pid := procNum.U(procNumBits.W)
 
     when(io.wen) {
       mem.write(addr, wr)

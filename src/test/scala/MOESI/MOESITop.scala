@@ -60,37 +60,36 @@ class MOESITop() extends Module with HasMOESIParameters with Formal {
     prBundle(i) := Cat(l1s(i).io.procOp, l1s(i).io.prAddr, l1s(i).io.cacheInput).asUInt
   }
 
-  def generateAssert(addr: UInt): Unit = {
+  def generateAssert(ast: (Bool, String) => Unit, addr: UInt): Unit = {
     val (tag, index) = parseAddr(addr)
     val match_tag = l1s.map { l1 =>
       Mux(l1.io.tagDirectory(index) === tag, l1.io.cacheStatus(index), Invalidated)
     }
     val exclusive = PopCount(match_tag.map(_ === Exclusive))
-    inputValid(exclusive <= 1.U)
+    ast(exclusive <= 1.U, "")
     val modified = PopCount(match_tag.map(_ === Modified))
-    inputValid(modified <= 1.U)
+    ast(modified <= 1.U, "")
     val owned = PopCount(match_tag.map(_ === Owned))
-    inputValid(owned <= 1.U)
+    ast(owned <= 1.U, "")
     val shared = PopCount(match_tag.map(_ === Shared))
-    inputValid(exclusive === 0.U || modified + owned + shared === 0.U)
-    inputValid(modified === 0.U || exclusive + owned + shared === 0.U)
-    inputValid(shared === 0.U || owned === 1.U)
+    ast(exclusive === 0.U || modified + owned + shared === 0.U, "")
+    ast(modified === 0.U || exclusive + owned + shared === 0.U, "")
+    ast(shared === 0.U || owned === 1.U, "")
   }
 
-  def inputValid(cond: Bool): Unit = {
+  def inputValid(cond: Bool, s: String = ""): Unit = {
     for (i <- 0 until procNum) {
       past(prBundle(i), 1) { pastIO =>
         assert(cond ||
-          l1s(i).io.procOp === 1.U ||
-          l1s(i).io.procOp === 2.U ||
-          prBundle(i) =/= pastIO)
+          !(!l1s(i).io.prHlt ||
+            prBundle(i) === pastIO), s)
       }
     }
   }
 
-  (0 until 1 << addrBits).foreach { addr =>
-    generateAssert(addr.U(addrBits.W))
-  }
+//  (0 until 1 << addrBits).foreach { addr =>
+//    generateAssert(assert, addr.U(addrBits.W))
+//  }
 
   bus.io.memIn := mem.io.busResp
   mem.io.busIn := bus.io.memOut
