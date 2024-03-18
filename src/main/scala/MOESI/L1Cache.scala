@@ -31,7 +31,7 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
     val tagDirectory = Output(Vec(cacheBlockNum, UInt(tagBits.W)))
   })
   val prHlt = RegInit(false.B)
-  val hltFlag = RegInit(false.B)
+  val processing = RegInit(false.B)
   val cacheOutput = WireDefault(0.U(cacheBlockBits.W))
   val busOut = RegInit(0.U.asTypeOf(new BusData))
   val validateBus = RegInit(false.B)
@@ -40,18 +40,57 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
   val prAddr = RegInit(0.U(addrBits.W))
   val prData = RegInit(0.U(cacheBlockBits.W))
 
-  // every operation must stay stable for at least 2 beats for prHlt to take effect
-  when(!prHlt) {
-      when(io.procOp === PrRd || io.procOp === PrWr) {
-        prOp := io.procOp
-        prAddr := io.prAddr
-        prData := io.cacheInput
-      }.otherwise {
-        prOp := 0.U
-        prAddr := 0.U
-        prData := 0.U
-      }
+  val ioPrOp = RegInit(0.U(procOpBits.W))
+  val ioPrAddr = RegInit(0.U(addrBits.W))
+  val ioPrData = RegInit(0.U(cacheBlockBits.W))
+
+  val beatCounter = RegInit(0.U(3.W))
+
+  when(hostPid === 0.U) {
+    printf("--- 0 ---\n")
   }
+  when(ioPrOp === PrWr || ioPrOp === PrRd) {
+    when(hostPid === 0.U) {
+      printf("--- 1 ---\n")
+    }
+    processing := true.B
+    ioPrOp := ioPrOp
+    ioPrAddr := ioPrAddr
+    ioPrData := ioPrData
+  }.otherwise {
+    when(hostPid === 0.U) {
+      printf("--- 2 ---\n")
+    }
+    ioPrOp := io.procOp
+    ioPrAddr := io.prAddr
+    ioPrData := io.cacheInput
+  }
+  when(processing) {
+    when(hostPid === 0.U) {
+      printf("--- 3 ---\n")
+    }
+    prOp := ioPrOp
+    prAddr := ioPrAddr
+    prData := ioPrData
+  }
+
+  // every operation must stay stable for at least 2 beats for prHlt to take effect
+//  when(!prHlt) {
+//      when(io.procOp === PrRd || io.procOp === PrWr) {
+//        prOp := io.procOp
+//        prAddr := io.prAddr
+//        prData := io.cacheInput
+//      }.otherwise {
+//        prOp := 0.U
+//        prAddr := 0.U
+//        prData := 0.U
+//      }
+//    beatCounter := 0.U
+//  }.otherwise {
+//    beatCounter := 0.U
+//  }
+//  printf("pid %d: counter = %d\n", hostPid, beatCounter)
+
 
   io.prHlt := prHlt
   io.validateBus := validateBus
@@ -97,6 +136,16 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
   io.addrEq := busAddr === prAddr
   io.cacheStatus := cacheStatus
   io.tagDirectory := tagDirectory
+
+  def disableIO(): Unit = {
+    processing := false.B
+    ioPrOp := 0.U
+    ioPrAddr := 0.U
+    ioPrData := 0.U
+    prOp := 0.U
+    prAddr := 0.U
+    prData := 0.U
+  }
 
   // whether the address hits
   def isHit(t: UInt, i: UInt): Bool = {
@@ -237,6 +286,7 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
       when(busTrans === Flush) {
         printf("pid %d: Stage 18\n", hostPid)
         prHlt := false.B
+        disableIO()
         when(prOp === PrRd) {
           printf("pid %d: Stage 19\n", hostPid)
           L1Cache(busIndex) := busData
@@ -259,6 +309,7 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
     // the response is from the memory (one response can only respond to the origin of the request)
     when(busTrans === Fill && busAddr === prAddr) {
       prHlt := false.B
+      disableIO()
       when(prOp === PrRd) {
         printf("pid %d: Stage 21\n", hostPid)
         L1Cache(busIndex) := busData
@@ -283,6 +334,7 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
         L1Cache(index) := busData
         printf("pid %d: L1Cache(%d) -> %d\n", hostPid, index, busData)
         prHlt := false.B
+        disableIO()
       }
     }
   }.elsewhen(!prHlt) {
