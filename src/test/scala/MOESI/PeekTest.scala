@@ -6,7 +6,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 
 
 class PeekTest extends AnyFlatSpec with ChiselScalatestTester with HasMOESIParameters {
-  def pokeProc(moesi: MOESITop, procOp: Seq[Int], addr: Seq[Int], data: Seq[Int] = Seq.fill(4)(0)) = {
+  def pokeProc(moesi: MOESITop, procOp: Seq[Int], addr: Seq[Int], data: Seq[Int] = Seq.fill(4)(0)): Unit = {
     for (i <- 0 until procNum) {
       if (procOp(i) != 0) {
         moesi.io.procOp(i).poke(procOp(i).U(procOpBits.W))
@@ -20,24 +20,40 @@ class PeekTest extends AnyFlatSpec with ChiselScalatestTester with HasMOESIParam
     }
   }
 
+  def endSign(moesi: MOESITop): Unit = {
+    pokeProc(moesi, Seq(0, 0, 0, 0), Seq(0,0,0,0))
+    moesi.clock.step()
+  }
+
   "Test" should "pass" in {
     test(new MOESITop()).withAnnotations(Seq(WriteVcdAnnotation)) { moesi =>
       pokeProc(moesi, Seq(2, 0, 0, 0), Seq(1, 0, 0, 0), Seq(15, 0, 0, 0))
       moesi.clock.step()
-      pokeProc(moesi, Seq(2, 0, 0, 0), Seq(1, 0, 0, 0), Seq(15, 0, 0, 0))
-      moesi.clock.step()
+//      pokeProc(moesi, Seq(2, 0, 0, 0), Seq(1, 0, 0, 0), Seq(15, 0, 0, 0))
+//      moesi.clock.step()
+//      pokeProc(moesi, Seq(0, 2, 0, 0), Seq(0, 1, 0, 0), Seq(0, 15, 0, 0))
+//      moesi.clock.step()
+
       pokeProc(moesi, Seq(1, 0, 0, 0), Seq(2, 0, 0, 0))
       moesi.clock.step()
-      pokeProc(moesi, Seq(1, 0, 0, 0), Seq(2, 0, 0, 0))
-      moesi.clock.step()
+//      pokeProc(moesi, Seq(1, 0, 0, 0), Seq(2, 0, 0, 0))
+//      moesi.clock.step()
+//      pokeProc(moesi, Seq(0, 1, 0, 0), Seq(0, 2, 0, 0))
+//      moesi.clock.step()
+
       pokeProc(moesi, Seq(1, 0, 0, 0), Seq(3, 0, 0, 0))
       moesi.clock.step()
-      pokeProc(moesi, Seq(1, 0, 0, 0), Seq(3, 0, 0, 0))
-      moesi.clock.step()
+//      pokeProc(moesi, Seq(1, 0, 0, 0), Seq(3, 0, 0, 0))
+//      moesi.clock.step()
+//      pokeProc(moesi, Seq(0, 1, 0, 0), Seq(3, 0, 0, 0))
+//      moesi.clock.step()
+
       pokeProc(moesi, Seq(2, 0, 0, 0), Seq(2, 0, 0, 0))
       moesi.clock.step()
-      pokeProc(moesi, Seq(2, 0, 0, 0), Seq(2, 0, 0, 0))
-      moesi.clock.step()
+//      pokeProc(moesi, Seq(2, 0, 0, 0), Seq(2, 0, 0, 0))
+//      moesi.clock.step()
+//      pokeProc(moesi, Seq(0, 2, 0, 0), Seq(0, 2, 0, 0))
+//      moesi.clock.step()
 
       pokeProc(moesi, Seq(0, 0, 0, 0), Seq(0, 0, 0, 0))
       moesi.clock.step()
@@ -65,7 +81,6 @@ class PeekTest extends AnyFlatSpec with ChiselScalatestTester with HasMOESIParam
         println("---------------------------------------------------")
         println("step: " + step)
         moesi.clock.step()
-        result = moesi.io.cacheOutput(0).peekInt()
         println(s"\tbusData: \n " +
           s"\t\tpid: ${moesi.io.busData.pid.peekInt()}\n " +
           s"\t\ttrans: ${moesi.io.busData.busTransaction.peekInt()}\n " +
@@ -74,7 +89,7 @@ class PeekTest extends AnyFlatSpec with ChiselScalatestTester with HasMOESIParam
           s"\t\tcacheBlock: ${moesi.io.busData.cacheBlock.peekInt()}\n " +
           s"\t\tstate: ${moesi.io.busData.state.peekInt()}\n " +
           s"\t\tvalid: ${moesi.io.busData.valid.peekBoolean()}")
-      } while (step < 2 || moesi.io.procHlt(0).peekBoolean())
+      } while (!moesi.io.procResp(0).peekBoolean())
 
       step = 0
       do {
@@ -93,8 +108,10 @@ class PeekTest extends AnyFlatSpec with ChiselScalatestTester with HasMOESIParam
           s"\t\tcacheBlock: ${moesi.io.busData.cacheBlock.peekInt()}\n " +
           s"\t\tstate: ${moesi.io.busData.state.peekInt()}\n " +
           s"\t\tvalid: ${moesi.io.busData.valid.peekBoolean()}")
-      } while (step < 2 || (step < 20 && (result == 0 || moesi.io.procHlt(0).peekBoolean())))
+      } while (step < 20 && !moesi.io.procResp(0).peekBoolean())
       println("cache0 output = " + result)
+
+      endSign(moesi)
     }
   }
 
@@ -104,20 +121,14 @@ class PeekTest extends AnyFlatSpec with ChiselScalatestTester with HasMOESIParam
       for (addr <- 1 until 2) {
         var result: BigInt = 0
         var step: Int = 0
-        var flag: Boolean = true
-        var prHlt: Boolean = false
         do {
           pokeProc(moesi, Seq(0, 1, 0, 0), Seq(0, addr, 0, 0))
 
           step += 1
-          println("-------------------------------------")
+          println("---------------------------------------------------")
           println("step: " + step)
           moesi.clock.step()
-          //          println(s"addr: ${addr}")
           result = moesi.io.cacheOutput(1).peekInt()
-          println(s"busHold: ${moesi.io.busHold.peekBoolean()}")
-          println(s"busValid: ${moesi.io.busValid.peekBoolean()}")
-          println(s"proc0Valid: ${moesi.io.procValid.peekBoolean()}")
           println(s"\tbusData: \n " +
             s"\t\tpid: ${moesi.io.busData.pid.peekInt()}\n " +
             s"\t\ttrans: ${moesi.io.busData.busTransaction.peekInt()}\n " +
@@ -125,24 +136,11 @@ class PeekTest extends AnyFlatSpec with ChiselScalatestTester with HasMOESIParam
             s"\t\tindex: ${moesi.io.busData.index.peekInt()}\n " +
             s"\t\tcacheBlock: ${moesi.io.busData.cacheBlock.peekInt()}\n " +
             s"\t\tstate: ${moesi.io.busData.state.peekInt()}\n " +
-            s"\t\tvalid: ${moesi.io.busData.valid.peekBoolean()}\n " +
-            s"\t\taddr: ${moesi.io.busAddr.peekInt()}\n " +
-            s"\t\taddrEq: ${moesi.io.addrEq.peekBoolean()}")
-          println(s"\tmemData: \n " +
-            s"\t\tpid: ${moesi.io.memory.pid.peekInt()}\n " +
-            s"\t\ttrans: ${moesi.io.memory.busTransaction.peekInt()}\n " +
-            s"\t\ttag: ${moesi.io.memory.tag.peekInt()}\n " +
-            s"\t\tindex: ${moesi.io.memory.index.peekInt()}\n " +
-            s"\t\tcacheBlock: ${moesi.io.memory.cacheBlock.peekInt()}\n " +
-            s"\t\tstate: ${moesi.io.memory.state.peekInt()}\n " +
-            s"\t\tvalid: ${moesi.io.memory.valid.peekBoolean()}\n " +
-            s"\t\taddr: ${moesi.io.memAddr.peekInt()}")
-          println(s"\tcacheStatus(1)(1): ${moesi.io.cacheStatus(1)(1).peekInt()}")
-          prHlt = moesi.io.procHlt(1).peekBoolean()
-          println(s"prHlt: $prHlt\n")
-          if (prHlt) flag = false
-        } while (step < 20 && (flag || prHlt))
-        println("cache0 output = " + result)
+            s"\t\tvalid: ${moesi.io.busData.valid.peekBoolean()}")
+        } while (step < 20 && !moesi.io.procResp(1).peekBoolean())
+        println("cache1 output = " + result)
+
+        endSign(moesi)
       }
     }
   }
@@ -153,48 +151,8 @@ class PeekTest extends AnyFlatSpec with ChiselScalatestTester with HasMOESIParam
     test(new MOESITop).withAnnotations(Seq(WriteVcdAnnotation)) { moesi =>
       var result: BigInt = 0
       var step: Int = 0
-      var flag: Boolean = true
-      var prHlt: Boolean = false
       do {
         pokeProc(moesi, Seq(0, 1, 0, 0), Seq(0, 1, 0, 0))
-
-        step += 1
-        println("-------------------------------------")
-        println("step: " + step)
-        moesi.clock.step()
-        //          println(s"addr: ${addr}")
-        result = moesi.io.cacheOutput(1).peekInt()
-        println(s"busHold: ${moesi.io.busHold.peekBoolean()}")
-        println(s"busValid: ${moesi.io.busValid.peekBoolean()}")
-        println(s"proc0Valid: ${moesi.io.procValid.peekBoolean()}")
-        println(s"\tbusData: \n " +
-          s"\t\tpid: ${moesi.io.busData.pid.peekInt()}\n " +
-          s"\t\ttrans: ${moesi.io.busData.busTransaction.peekInt()}\n " +
-          s"\t\ttag: ${moesi.io.busData.tag.peekInt()}\n " +
-          s"\t\tindex: ${moesi.io.busData.index.peekInt()}\n " +
-          s"\t\tcacheBlock: ${moesi.io.busData.cacheBlock.peekInt()}\n " +
-          s"\t\tstate: ${moesi.io.busData.state.peekInt()}\n " +
-          s"\t\tvalid: ${moesi.io.busData.valid.peekBoolean()}\n " +
-          s"\t\taddr: ${moesi.io.busAddr.peekInt()}\n " +
-          s"\t\taddrEq: ${moesi.io.addrEq.peekBoolean()}")
-        println(s"\tmemData: \n " +
-          s"\t\tpid: ${moesi.io.memory.pid.peekInt()}\n " +
-          s"\t\ttrans: ${moesi.io.memory.busTransaction.peekInt()}\n " +
-          s"\t\ttag: ${moesi.io.memory.tag.peekInt()}\n " +
-          s"\t\tindex: ${moesi.io.memory.index.peekInt()}\n " +
-          s"\t\tcacheBlock: ${moesi.io.memory.cacheBlock.peekInt()}\n " +
-          s"\t\tstate: ${moesi.io.memory.state.peekInt()}\n " +
-          s"\t\tvalid: ${moesi.io.memory.valid.peekBoolean()}\n " +
-          s"\t\taddr: ${moesi.io.memAddr.peekInt()}")
-        println(s"\tcacheStatus(1)(1): ${moesi.io.cacheStatus(1)(1).peekInt()}")
-        prHlt = moesi.io.procHlt(1).peekBoolean()
-        println(s"prHlt: $prHlt\n")
-        if (prHlt) flag = false
-      } while (step < 20 && (flag || prHlt))
-
-      step = 0
-      do {
-        pokeProc(moesi, Seq(0, 2, 0, 0), Seq(0, 1, 0, 0), Seq(0, 15, 0, 0))
 
         step += 1
         println("---------------------------------------------------")
@@ -209,7 +167,27 @@ class PeekTest extends AnyFlatSpec with ChiselScalatestTester with HasMOESIParam
           s"\t\tcacheBlock: ${moesi.io.busData.cacheBlock.peekInt()}\n " +
           s"\t\tstate: ${moesi.io.busData.state.peekInt()}\n " +
           s"\t\tvalid: ${moesi.io.busData.valid.peekBoolean()}")
-      } while (step < 2 || (step < 20 && moesi.io.procHlt(1).peekBoolean()))
+      } while (step < 20 && !moesi.io.procResp(1).peekBoolean())
+
+      step = 0
+      do {
+        pokeProc(moesi, Seq(0, 2, 0, 0), Seq(0, 1, 0, 0), Seq(0, 15, 0, 0))
+
+        step += 1
+        println("---------------------------------------------------")
+        println("step: " + step)
+        moesi.clock.step()
+        println(s"\tbusData: \n " +
+          s"\t\tpid: ${moesi.io.busData.pid.peekInt()}\n " +
+          s"\t\ttrans: ${moesi.io.busData.busTransaction.peekInt()}\n " +
+          s"\t\ttag: ${moesi.io.busData.tag.peekInt()}\n " +
+          s"\t\tindex: ${moesi.io.busData.index.peekInt()}\n " +
+          s"\t\tcacheBlock: ${moesi.io.busData.cacheBlock.peekInt()}\n " +
+          s"\t\tstate: ${moesi.io.busData.state.peekInt()}\n " +
+          s"\t\tvalid: ${moesi.io.busData.valid.peekBoolean()}")
+      } while (step < 20 && !moesi.io.procResp(1).peekBoolean())
+
+      endSign(moesi)
     }
   }
 
@@ -220,20 +198,14 @@ class PeekTest extends AnyFlatSpec with ChiselScalatestTester with HasMOESIParam
     test(new MOESITop).withAnnotations(Seq(WriteVcdAnnotation)) { moesi =>
       var result: BigInt = 0
       var step: Int = 0
-      var flag: Boolean = true
-      var prHlt: Boolean = false
       do {
         pokeProc(moesi, Seq(0, 1, 0, 0), Seq(0, 1, 0, 0))
 
         step += 1
-        println("-------------------------------------")
+        println("---------------------------------------------------")
         println("step: " + step)
         moesi.clock.step()
         result = moesi.io.cacheOutput(1).peekInt()
-        //          println(s"addr: ${addr}")
-        println(s"busHold: ${moesi.io.busHold.peekBoolean()}")
-        println(s"busValid: ${moesi.io.busValid.peekBoolean()}")
-        println(s"proc0Valid: ${moesi.io.procValid.peekBoolean()}")
         println(s"\tbusData: \n " +
           s"\t\tpid: ${moesi.io.busData.pid.peekInt()}\n " +
           s"\t\ttrans: ${moesi.io.busData.busTransaction.peekInt()}\n " +
@@ -241,23 +213,8 @@ class PeekTest extends AnyFlatSpec with ChiselScalatestTester with HasMOESIParam
           s"\t\tindex: ${moesi.io.busData.index.peekInt()}\n " +
           s"\t\tcacheBlock: ${moesi.io.busData.cacheBlock.peekInt()}\n " +
           s"\t\tstate: ${moesi.io.busData.state.peekInt()}\n " +
-          s"\t\tvalid: ${moesi.io.busData.valid.peekBoolean()}\n " +
-          s"\t\taddr: ${moesi.io.busAddr.peekInt()}\n " +
-          s"\t\taddrEq: ${moesi.io.addrEq.peekBoolean()}")
-        println(s"\tmemData: \n " +
-          s"\t\tpid: ${moesi.io.memory.pid.peekInt()}\n " +
-          s"\t\ttrans: ${moesi.io.memory.busTransaction.peekInt()}\n " +
-          s"\t\ttag: ${moesi.io.memory.tag.peekInt()}\n " +
-          s"\t\tindex: ${moesi.io.memory.index.peekInt()}\n " +
-          s"\t\tcacheBlock: ${moesi.io.memory.cacheBlock.peekInt()}\n " +
-          s"\t\tstate: ${moesi.io.memory.state.peekInt()}\n " +
-          s"\t\tvalid: ${moesi.io.memory.valid.peekBoolean()}\n " +
-          s"\t\taddr: ${moesi.io.memAddr.peekInt()}")
-        println(s"\tcacheStatus(1)(1): ${moesi.io.cacheStatus(1)(1).peekInt()}")
-        prHlt = moesi.io.procHlt(1).peekBoolean()
-        println(s"prHlt: $prHlt\n")
-        if (prHlt) flag = false
-      } while (step < 2 || (step < 20 && (flag || prHlt)))
+          s"\t\tvalid: ${moesi.io.busData.valid.peekBoolean()}")
+      } while (step < 20 && !moesi.io.procResp(1).peekBoolean())
 
       step = 0
       do {
@@ -267,7 +224,6 @@ class PeekTest extends AnyFlatSpec with ChiselScalatestTester with HasMOESIParam
         println("---------------------------------------------------")
         println("step: " + step)
         moesi.clock.step()
-        result = moesi.io.cacheOutput(1).peekInt()
         println(s"\tbusData: \n " +
           s"\t\tpid: ${moesi.io.busData.pid.peekInt()}\n " +
           s"\t\ttrans: ${moesi.io.busData.busTransaction.peekInt()}\n " +
@@ -276,7 +232,7 @@ class PeekTest extends AnyFlatSpec with ChiselScalatestTester with HasMOESIParam
           s"\t\tcacheBlock: ${moesi.io.busData.cacheBlock.peekInt()}\n " +
           s"\t\tstate: ${moesi.io.busData.state.peekInt()}\n " +
           s"\t\tvalid: ${moesi.io.busData.valid.peekBoolean()}")
-      } while (step < 2 || (step < 20 && moesi.io.procHlt(1).peekBoolean()))
+      } while (step < 20 && !moesi.io.procResp(1).peekBoolean())
 
       step = 0
       do {
@@ -286,7 +242,6 @@ class PeekTest extends AnyFlatSpec with ChiselScalatestTester with HasMOESIParam
         println("---------------------------------------------------")
         println("step: " + step)
         moesi.clock.step()
-        result = moesi.io.cacheOutput(1).peekInt()
         println(s"\tbusData: \n " +
           s"\t\tpid: ${moesi.io.busData.pid.peekInt()}\n " +
           s"\t\ttrans: ${moesi.io.busData.busTransaction.peekInt()}\n " +
@@ -295,7 +250,9 @@ class PeekTest extends AnyFlatSpec with ChiselScalatestTester with HasMOESIParam
           s"\t\tcacheBlock: ${moesi.io.busData.cacheBlock.peekInt()}\n " +
           s"\t\tstate: ${moesi.io.busData.state.peekInt()}\n " +
           s"\t\tvalid: ${moesi.io.busData.valid.peekBoolean()}")
-      } while (step < 2 || (step < 20 && moesi.io.procHlt(1).peekBoolean()))
+      } while (step < 4 || (step < 20 && !moesi.io.procResp(1).peekBoolean()))
+
+      endSign(moesi)
     }
   }
 
@@ -312,7 +269,6 @@ class PeekTest extends AnyFlatSpec with ChiselScalatestTester with HasMOESIParam
         println("---------------------------------------------------")
         println("step: " + step)
         moesi.clock.step()
-        result = moesi.io.cacheOutput(1).peekInt()
         println(s"\tbusData: \n " +
           s"\t\tpid: ${moesi.io.busData.pid.peekInt()}\n " +
           s"\t\ttrans: ${moesi.io.busData.busTransaction.peekInt()}\n " +
@@ -321,11 +277,8 @@ class PeekTest extends AnyFlatSpec with ChiselScalatestTester with HasMOESIParam
           s"\t\tcacheBlock: ${moesi.io.busData.cacheBlock.peekInt()}\n " +
           s"\t\tstate: ${moesi.io.busData.state.peekInt()}\n " +
           s"\t\tvalid: ${moesi.io.busData.valid.peekBoolean()}")
-      } while (step < 2 || moesi.io.procHlt(1).peekBoolean())
+      } while (!moesi.io.procResp(1).peekBoolean())
 
-      //      println("---------------------------------------------------")
-      //      pokeProc(moesi, Seq(0,0,0,0), Seq(0,0,0,0))
-      //      moesi.clock.step()
       step = 0
       do {
         pokeProc(moesi, Seq(0, 0, 1, 0), Seq(0, 0, 1, 0))
@@ -343,8 +296,10 @@ class PeekTest extends AnyFlatSpec with ChiselScalatestTester with HasMOESIParam
           s"\t\tcacheBlock: ${moesi.io.busData.cacheBlock.peekInt()}\n " +
           s"\t\tstate: ${moesi.io.busData.state.peekInt()}\n " +
           s"\t\tvalid: ${moesi.io.busData.valid.peekBoolean()}")
-      } while (step < 2 || (step < 20 && (result == 0 || moesi.io.procHlt(2).peekBoolean())))
-      println("cache0 output = " + result)
+      } while (step < 20 && !moesi.io.procResp(2).peekBoolean())
+      println("cache2 output = " + result)
+
+      endSign(moesi)
     }
   }
 
@@ -363,7 +318,6 @@ class PeekTest extends AnyFlatSpec with ChiselScalatestTester with HasMOESIParam
         println("---------------------------------------------------")
         println("step: " + step)
         moesi.clock.step()
-        result = moesi.io.cacheOutput(1).peekInt()
         println(s"\tbusData: \n " +
           s"\t\tpid: ${moesi.io.busData.pid.peekInt()}\n " +
           s"\t\ttrans: ${moesi.io.busData.busTransaction.peekInt()}\n " +
@@ -372,7 +326,7 @@ class PeekTest extends AnyFlatSpec with ChiselScalatestTester with HasMOESIParam
           s"\t\tcacheBlock: ${moesi.io.busData.cacheBlock.peekInt()}\n " +
           s"\t\tstate: ${moesi.io.busData.state.peekInt()}\n " +
           s"\t\tvalid: ${moesi.io.busData.valid.peekBoolean()}")
-      } while (step < 2 || moesi.io.procHlt(1).peekBoolean())
+      } while (step < 20 && !moesi.io.procResp(1).peekBoolean())
 
       step = 0
       do {
@@ -391,8 +345,8 @@ class PeekTest extends AnyFlatSpec with ChiselScalatestTester with HasMOESIParam
           s"\t\tcacheBlock: ${moesi.io.busData.cacheBlock.peekInt()}\n " +
           s"\t\tstate: ${moesi.io.busData.state.peekInt()}\n " +
           s"\t\tvalid: ${moesi.io.busData.valid.peekBoolean()}")
-      } while (step < 2 || (step < 20 && (result == 0 || moesi.io.procHlt(2).peekBoolean())))
-      println("cache0 output = " + result)
+      } while (step < 20 && !moesi.io.procResp(2).peekBoolean())
+      println("cache2 output = " + result)
 
       step = 0
       do {
@@ -402,7 +356,6 @@ class PeekTest extends AnyFlatSpec with ChiselScalatestTester with HasMOESIParam
         println("---------------------------------------------------")
         println("step: " + step)
         moesi.clock.step()
-        result = moesi.io.cacheOutput(1).peekInt()
         println(s"\tbusData: \n " +
           s"\t\tpid: ${moesi.io.busData.pid.peekInt()}\n " +
           s"\t\ttrans: ${moesi.io.busData.busTransaction.peekInt()}\n " +
@@ -411,7 +364,9 @@ class PeekTest extends AnyFlatSpec with ChiselScalatestTester with HasMOESIParam
           s"\t\tcacheBlock: ${moesi.io.busData.cacheBlock.peekInt()}\n " +
           s"\t\tstate: ${moesi.io.busData.state.peekInt()}\n " +
           s"\t\tvalid: ${moesi.io.busData.valid.peekBoolean()}")
-      } while (step < 2 || moesi.io.procHlt(1).peekBoolean())
+      } while (step < 20 && !moesi.io.procResp(1).peekBoolean())
+
+      endSign(moesi)
     }
   }
 
@@ -422,20 +377,14 @@ class PeekTest extends AnyFlatSpec with ChiselScalatestTester with HasMOESIParam
     test(new MOESITop).withAnnotations(Seq(WriteVcdAnnotation)) { moesi =>
       var result: BigInt = 0
       var step: Int = 0
-      var flag: Boolean = true
-      var prHlt: Boolean = false
       do {
         pokeProc(moesi, Seq(0, 1, 0, 0), Seq(0, 1, 0, 0))
 
         step += 1
-        println("-------------------------------------")
+        println("---------------------------------------------------")
         println("step: " + step)
         moesi.clock.step()
         result = moesi.io.cacheOutput(1).peekInt()
-        //          println(s"addr: ${addr}")
-        println(s"busHold: ${moesi.io.busHold.peekBoolean()}")
-        println(s"busValid: ${moesi.io.busValid.peekBoolean()}")
-        println(s"proc0Valid: ${moesi.io.procValid.peekBoolean()}")
         println(s"\tbusData: \n " +
           s"\t\tpid: ${moesi.io.busData.pid.peekInt()}\n " +
           s"\t\ttrans: ${moesi.io.busData.busTransaction.peekInt()}\n " +
@@ -443,23 +392,8 @@ class PeekTest extends AnyFlatSpec with ChiselScalatestTester with HasMOESIParam
           s"\t\tindex: ${moesi.io.busData.index.peekInt()}\n " +
           s"\t\tcacheBlock: ${moesi.io.busData.cacheBlock.peekInt()}\n " +
           s"\t\tstate: ${moesi.io.busData.state.peekInt()}\n " +
-          s"\t\tvalid: ${moesi.io.busData.valid.peekBoolean()}\n " +
-          s"\t\taddr: ${moesi.io.busAddr.peekInt()}\n " +
-          s"\t\taddrEq: ${moesi.io.addrEq.peekBoolean()}")
-        println(s"\tmemData: \n " +
-          s"\t\tpid: ${moesi.io.memory.pid.peekInt()}\n " +
-          s"\t\ttrans: ${moesi.io.memory.busTransaction.peekInt()}\n " +
-          s"\t\ttag: ${moesi.io.memory.tag.peekInt()}\n " +
-          s"\t\tindex: ${moesi.io.memory.index.peekInt()}\n " +
-          s"\t\tcacheBlock: ${moesi.io.memory.cacheBlock.peekInt()}\n " +
-          s"\t\tstate: ${moesi.io.memory.state.peekInt()}\n " +
-          s"\t\tvalid: ${moesi.io.memory.valid.peekBoolean()}\n " +
-          s"\t\taddr: ${moesi.io.memAddr.peekInt()}")
-        println(s"\tcacheStatus(1)(1): ${moesi.io.cacheStatus(1)(1).peekInt()}")
-        prHlt = moesi.io.procHlt(1).peekBoolean()
-        println(s"prHlt: $prHlt\n")
-        if (prHlt) flag = false
-      } while (step < 2 || (step < 20 && (flag || prHlt)))
+          s"\t\tvalid: ${moesi.io.busData.valid.peekBoolean()}")
+      } while (step < 20 && !moesi.io.procResp(1).peekBoolean())
 
       step = 0
       do {
@@ -469,7 +403,6 @@ class PeekTest extends AnyFlatSpec with ChiselScalatestTester with HasMOESIParam
         println("---------------------------------------------------")
         println("step: " + step)
         moesi.clock.step()
-        result = moesi.io.cacheOutput(1).peekInt()
         println(s"\tbusData: \n " +
           s"\t\tpid: ${moesi.io.busData.pid.peekInt()}\n " +
           s"\t\ttrans: ${moesi.io.busData.busTransaction.peekInt()}\n " +
@@ -478,7 +411,7 @@ class PeekTest extends AnyFlatSpec with ChiselScalatestTester with HasMOESIParam
           s"\t\tcacheBlock: ${moesi.io.busData.cacheBlock.peekInt()}\n " +
           s"\t\tstate: ${moesi.io.busData.state.peekInt()}\n " +
           s"\t\tvalid: ${moesi.io.busData.valid.peekBoolean()}")
-      } while (step < 2 || (step < 20 && moesi.io.procHlt(1).peekBoolean()))
+      } while (step < 20 && !moesi.io.procResp(1).peekBoolean())
 
       step = 0
       do {
@@ -488,7 +421,6 @@ class PeekTest extends AnyFlatSpec with ChiselScalatestTester with HasMOESIParam
         println("---------------------------------------------------")
         println("step: " + step)
         moesi.clock.step()
-        result = moesi.io.cacheOutput(2).peekInt()
         println(s"\tbusData: \n " +
           s"\t\tpid: ${moesi.io.busData.pid.peekInt()}\n " +
           s"\t\ttrans: ${moesi.io.busData.busTransaction.peekInt()}\n " +
@@ -497,7 +429,7 @@ class PeekTest extends AnyFlatSpec with ChiselScalatestTester with HasMOESIParam
           s"\t\tcacheBlock: ${moesi.io.busData.cacheBlock.peekInt()}\n " +
           s"\t\tstate: ${moesi.io.busData.state.peekInt()}\n " +
           s"\t\tvalid: ${moesi.io.busData.valid.peekBoolean()}")
-      } while (step < 2 || (step < 20 && moesi.io.procHlt(2).peekBoolean()))
+      } while (step < 20 && !moesi.io.procResp(2).peekBoolean())
     }
   }
 }
