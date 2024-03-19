@@ -18,7 +18,7 @@ class MESIPS(val tagB: Int, val indexB: Int, val blockB: Int) {
     val indexStart = 0
     val indexEnd = indexStart + indexBits - 1
     val index = addr(indexEnd, indexStart)
-    val tagStart = indexEnd
+    val tagStart = indexEnd + 1
     val tagEnd = tagStart + tagBits - 1
     val tag = addr(tagEnd, tagStart)
     (tag, index)
