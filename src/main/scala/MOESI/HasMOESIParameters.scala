@@ -5,6 +5,7 @@ import chisel3.util._
 
 trait HasMOESIParameters {
   val busTransBits: Int = 3
+  def Repl: UInt = 7.U(busTransBits.W)
   def Ack: UInt = 6.U(busTransBits.W)
   def BusRd: UInt = 5.U(busTransBits.W)
   def BusRdX: UInt = 4.U(busTransBits.W)

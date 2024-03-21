@@ -74,9 +74,9 @@ class Bus extends Module with HasMOESIParameters {
     }
     // waiting for the response from the memory
     when(memHold && memData.valid && busData.valid && memData.addr === busData.addr) {
-      printf("bus: Stage 3\n")
-      when(memData.busTransaction === BusUpgrade) {
-        printf("bus: Stage 4\n")
+      printf("bus: Stage 4\n")
+      when(memData.busTransaction === BusUpgrade || memData.busTransaction === Repl) {
+        printf("bus: Stage 5\n")
         memHold := false.B
         memWen := false.B
         when(!flushHold && !ackHold) {
@@ -85,14 +85,14 @@ class Bus extends Module with HasMOESIParameters {
       }.otherwise {
         // Fill transaction needs to wait one more beat for the cache to process
         when(memHoldFlag) {
-          printf("bus: Stage 5\n")
+          printf("bus: Stage 6\n")
           memHold := false.B
           memHoldFlag := false.B
           when(!flushHold && !ackHold) {
             enableIO()
           }
         }.otherwise {
-          printf("bus: Stage 6\n")
+          printf("bus: Stage 7\n")
           // copy the info of the memory (ignores pid because the response needs to correspond to the request)
           busData.busTransaction := memData.busTransaction
           busData.cacheBlock := memData.cacheBlock
@@ -102,7 +102,7 @@ class Bus extends Module with HasMOESIParameters {
     }
     // waiting for the response from other caches
     when(flushHold) {
-      printf("bus: Stage 7\n")
+      printf("bus: Stage 8\n")
       flushHold := false.B
       val flushFlag = io.l1CachesIn.map { l1 =>
         l1.valid &&
@@ -112,10 +112,17 @@ class Bus extends Module with HasMOESIParameters {
       printf("bus: flushFlag (%d, %d, %d, %d)\n",
         flushFlag(0), flushFlag(1), flushFlag(2), flushFlag(3))
       when(!flushFlag.reduce(_ || _)) {
-        printf("bus: Stage 8\n")
-        memHold := true.B
+        when(busData.busTransaction =/= Repl) {
+          printf("bus: Stage 9\n")
+          memHold := true.B
+          // bus replace request, inform the Owned cache to become Modified
+        }.otherwise {
+          printf("bus: Stage 10\n")
+          flushCleanFlag := true.B
+          busData.state := Invalidated
+        }
       }.otherwise {
-        printf("bus: Stage 9\n")
+        printf("bus: Stage 11\n")
         // get the pid of the responded cache
         val tarPid = MuxCase(procNum.U(procNumBits.W),
           flushFlag.zipWithIndex.map { flush =>
@@ -123,8 +130,15 @@ class Bus extends Module with HasMOESIParameters {
           })
         printf("bus: TarPid: %d\n", tarPid)
         when(tarPid =/= procNum.U(procNumBits.W)) {
-          printf("bus: Stage 10\n")
-          busData := io.l1CachesIn(tarPid)
+          when(busData.busTransaction === Repl) {
+            when(busData.state === Owned) {
+              printf("bus: Stage 12\n")
+              busData.pid := tarPid
+            }
+          }.otherwise {
+            printf("bus: Stage 13\n")
+            busData := io.l1CachesIn(tarPid)
+          }
         }
         // the flush data on the bus needs to be cleared, but it needs to last one more beat
         when(!memHold && !ackHold) {
@@ -133,7 +147,7 @@ class Bus extends Module with HasMOESIParameters {
       }
     }
   }.otherwise {
-    printf("bus: Stage 11\n")
+    printf("bus: Stage 14\n")
     memWen := false.B
     when(flushCleanFlag) {
       enableIO()
@@ -145,18 +159,32 @@ class Bus extends Module with HasMOESIParameters {
       busDataBuffer := io.l1CachesIn(OHToUInt(arbiter.io.grant))
     }
     when(busData.valid) {
-      printf("bus: Stage 12\n")
+      printf("bus: Stage 15\n")
 
       when(busData.busTransaction === BusRd) {
-        printf("bus: Stage 13\n")
+        printf("bus: Stage 16\n")
         flushHold := true.B
       }.elsewhen(busData.busTransaction === BusUpgrade) {
-        printf("bus: Stage 14\n")
+        printf("bus: Stage 17\n")
         memHold := true.B
         memWen := true.B
       }.elsewhen(busData.busTransaction === BusRdX) {
-        printf("bus: Stage 15\n")
+        printf("bus: Stage 18\n")
         enableIO()
+      }.elsewhen(busData.busTransaction === Repl) {
+        printf("bus: Stage 19\n")
+        switch(busData.state) {
+          is(Modified) {
+            memHold := true.B
+            memWen := true.B
+          }
+          is(Owned) {
+            flushHold := true.B
+          }
+          is(Shared) {
+            flushHold := true.B
+          }
+        }
       }
     }
   }

@@ -26,8 +26,8 @@ class Memory extends Module with HasMOESIParameters {
       mem.write(addr, wr)
       printf("memory: writes %d into %d\n", wr, addr)
       io.busResp.cacheBlock := wr
-      when(io.busIn.busTransaction === BusUpgrade) {
-        io.busResp.busTransaction := BusUpgrade
+      when(io.busIn.busTransaction === BusUpgrade || io.busIn.busTransaction === Repl) {
+        io.busResp.busTransaction := io.busIn.busTransaction
       }.otherwise {
         io.busResp.busTransaction := Invalid
       }
