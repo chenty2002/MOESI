@@ -20,6 +20,81 @@ class PeekTest extends AnyFlatSpec with ChiselScalatestTester with HasMESIParame
     }
   }
 
+  def wait(mesi: MESITop) = {
+    pokeProc(mesi, Seq(0, 0, 0, 0), Seq(0, 0, 0, 0))
+    mesi.clock.step()
+  }
+
+  "Final" should "pass" in {
+    test(new MESITop()).withAnnotations(Seq(WriteVcdAnnotation)) { mesi =>
+      var result: BigInt = 0
+      do {
+        pokeProc(mesi, Seq(1, 0, 0, 0), Seq(0, 0, 0, 0))
+        mesi.clock.step()
+        result = mesi.io.cacheOutput(0).peekInt()
+      } while (mesi.io.procHlt(0).peekBoolean())
+      println("result: ", result)
+
+      wait(mesi)
+      do {
+        pokeProc(mesi, Seq(1, 0, 0, 0), Seq(0, 0, 0, 0))
+        mesi.clock.step()
+        result = mesi.io.cacheOutput(0).peekInt()
+      } while (mesi.io.procHlt(0).peekBoolean())
+      println("result: ", result)
+
+      wait(mesi)
+      do {
+        pokeProc(mesi, Seq(2, 0, 0, 0), Seq(0, 0, 0, 0), Seq(1, 0, 0, 0))
+        mesi.clock.step()
+      } while (mesi.io.procHlt(0).peekBoolean())
+
+      wait(mesi)
+      do {
+        pokeProc(mesi, Seq(2, 0, 0, 0), Seq(0, 0, 0, 0), Seq(2, 0, 0, 0))
+        mesi.clock.step()
+      } while (mesi.io.procHlt(0).peekBoolean())
+
+      wait(mesi)
+      do {
+        pokeProc(mesi, Seq(0, 1, 0, 0), Seq(0, 0, 0, 0))
+        mesi.clock.step()
+        result = mesi.io.cacheOutput(0).peekInt()
+      } while (mesi.io.procHlt(1).peekBoolean())
+      println("result: ", result)
+
+      wait(mesi)
+      do {
+        pokeProc(mesi, Seq(0, 2, 0, 0), Seq(0, 0, 0, 0), Seq(0, 3, 0, 0))
+        mesi.clock.step()
+      } while (mesi.io.procHlt(1).peekBoolean())
+
+      wait(mesi)
+      do {
+        pokeProc(mesi, Seq(0, 2, 0, 0), Seq(0, 0, 0, 0), Seq(0, 4, 0, 0))
+        mesi.clock.step()
+      } while (mesi.io.procHlt(1).peekBoolean())
+
+      wait(mesi)
+      do {
+        pokeProc(mesi, Seq(2, 0, 0, 0), Seq(0, 0, 0, 0), Seq(5, 0, 0, 0))
+        mesi.clock.step()
+      } while (mesi.io.procHlt(0).peekBoolean())
+
+      wait(mesi)
+      do {
+        pokeProc(mesi, Seq(2, 0, 0, 0), Seq(1, 0, 0, 0), Seq(6, 0, 0, 0))
+        mesi.clock.step()
+      } while (mesi.io.procHlt(0).peekBoolean())
+
+      wait(mesi)
+      do {
+        pokeProc(mesi, Seq(2, 0, 0, 0), Seq(0, 0, 0, 0), Seq(7, 0, 0, 0))
+        mesi.clock.step()
+      } while (mesi.io.procHlt(0).peekBoolean())
+    }
+  }
+
   // processor0 writes 15 into addr 1 (Invalidated -> Modified)
   // processor0 reads from addr 1 (expects 15)
   "W&R" should "pass" in {
