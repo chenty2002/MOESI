@@ -14,7 +14,7 @@ class Bus extends Module with HasMOESIParameters {
     val memWen = Output(new Bool)
 
     val ackHold = Output(new Bool)
-    val hold = Output(new Bool)
+    val replFlag = Output(new Bool)
 
     val validateBus = Input(Vec(procNum, new Bool))
 
@@ -41,7 +41,8 @@ class Bus extends Module with HasMOESIParameters {
   val memHoldFlag = RegInit(false.B)
   val flushCleanFlag = RegInit(false.B)
   // indicating the bus is waiting for a response/ack from the memory/another cache
-  io.hold := memHold || flushHold || ackHold
+//  io.hold := memHold || flushHold || ackHold
+  io.replFlag := false.B
   io.ackHold := ackHold
 
   def enableIO(): Unit = {
@@ -79,6 +80,9 @@ class Bus extends Module with HasMOESIParameters {
         printf("bus: Stage 5\n")
         memHold := false.B
         memWen := false.B
+        when(memData.busTransaction === Repl) {
+          io.replFlag := true.B
+        }
         when(!flushHold && !ackHold) {
           enableIO()
         }
@@ -120,9 +124,13 @@ class Bus extends Module with HasMOESIParameters {
           printf("bus: Stage 10\n")
           flushCleanFlag := true.B
           busData.state := Invalidated
+          io.replFlag := true.B
         }
       }.otherwise {
         printf("bus: Stage 11\n")
+        val hasShared = io.l1CachesIn.zip(flushFlag).map { l1 =>
+          l1._1.state === Shared && l1._2
+        }.reduce(_ || _)
         // get the pid of the responded cache
         val tarPid = MuxCase(procNum.U(procNumBits.W),
           flushFlag.zipWithIndex.map { flush =>
@@ -131,9 +139,10 @@ class Bus extends Module with HasMOESIParameters {
         printf("bus: TarPid: %d\n", tarPid)
         when(tarPid =/= procNum.U(procNumBits.W)) {
           when(busData.busTransaction === Repl) {
-            when(busData.state === Owned) {
+            when(hasShared && busData.state === Owned) {
               printf("bus: Stage 12\n")
               busData.pid := tarPid
+              flushCleanFlag := true.B
             }
           }.otherwise {
             printf("bus: Stage 13\n")
@@ -150,6 +159,9 @@ class Bus extends Module with HasMOESIParameters {
     printf("bus: Stage 14\n")
     memWen := false.B
     when(flushCleanFlag) {
+      when(busData.busTransaction === Repl) {
+        io.replFlag := true.B
+      }
       enableIO()
       flushCleanFlag := false.B
     }.elsewhen(busDataBuffer.valid) {
@@ -158,9 +170,9 @@ class Bus extends Module with HasMOESIParameters {
     }.otherwise {
       busDataBuffer := io.l1CachesIn(OHToUInt(arbiter.io.grant))
     }
+
     when(busData.valid) {
       printf("bus: Stage 15\n")
-
       when(busData.busTransaction === BusRd) {
         printf("bus: Stage 16\n")
         flushHold := true.B

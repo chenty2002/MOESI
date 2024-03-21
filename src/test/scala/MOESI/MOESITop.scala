@@ -27,7 +27,7 @@ class MOESITop() extends Module with HasMOESIParameters with Formal {
     // DEBUG info
     val busData = Output(new BusData)
     val memory = Output(new BusData)
-    val busHold = Output(new Bool)
+    val replFlag = Output(new Bool)
     val busAddr = Output(UInt(addrBits.W))
     val busValid = Output(new Bool)
     val procValid = Output(new Bool)
@@ -52,7 +52,7 @@ class MOESITop() extends Module with HasMOESIParameters with Formal {
     l1s(i).io.busIn := bus.io.l1CachesOut(i)
     bus.io.l1CachesIn(i) := l1s(i).io.busOut
     bus.io.validateBus(i) := l1s(i).io.validateBus
-    l1s(i).io.busHold := bus.io.hold
+    l1s(i).io.busReplFlag := bus.io.replFlag
     l1s(i).io.busAckHold := bus.io.ackHold
 
     // DEBUG info
@@ -98,7 +98,7 @@ class MOESITop() extends Module with HasMOESIParameters with Formal {
   // DEBUG info
   io.busData := bus.io.l1CachesOut(1)
   io.memory := mem.io.busResp
-  io.busHold := bus.io.hold
+  io.replFlag := bus.io.replFlag
   io.busValid := bus.io.valid
   io.procValid := l1s(1).io.validateBus
   io.busAddr := bus.io.l1CachesOut(1).addr
