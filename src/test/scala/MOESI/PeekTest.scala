@@ -24,6 +24,68 @@ class PeekTest extends AnyFlatSpec with ChiselScalatestTester with HasMOESIParam
     pokeProc(moesi, Seq(0, 0, 0, 0), Seq(0,0,0,0))
     moesi.clock.step()
   }
+  
+  "Final" should "pass" in {
+    test(new MOESITop()).withAnnotations(Seq(WriteVcdAnnotation)) { moesi =>
+      var result: BigInt = 0
+      do {
+        pokeProc(moesi, Seq(1, 0, 0, 0), Seq(0, 0, 0, 0))
+        moesi.clock.step()
+        result = moesi.io.cacheOutput(0).peekInt()
+      } while (!moesi.io.procResp(0).peekBoolean())
+      println("result: ", result)
+
+      do {
+        pokeProc(moesi, Seq(1, 0, 0, 0), Seq(0, 0, 0, 0))
+        moesi.clock.step()
+        result = moesi.io.cacheOutput(0).peekInt()
+      } while (!moesi.io.procResp(0).peekBoolean())
+      println("result: ", result)
+
+      do {
+        pokeProc(moesi, Seq(2, 0, 0, 0), Seq(0, 0, 0, 0), Seq(1, 0, 0, 0))
+        moesi.clock.step()
+      } while (!moesi.io.procResp(0).peekBoolean())
+
+      do {
+        pokeProc(moesi, Seq(2, 0, 0, 0), Seq(0, 0, 0, 0), Seq(2, 0, 0, 0))
+        moesi.clock.step()
+      } while (!moesi.io.procResp(0).peekBoolean())
+
+      do {
+        pokeProc(moesi, Seq(0, 1, 0, 0), Seq(0, 0, 0, 0))
+        moesi.clock.step()
+        result = moesi.io.cacheOutput(1).peekInt()
+      } while (!moesi.io.procResp(1).peekBoolean())
+      println("result: ", result)
+
+      do {
+        pokeProc(moesi, Seq(0, 2, 0, 0), Seq(0, 0, 0, 0), Seq(0, 3, 0, 0))
+        moesi.clock.step()
+      } while (!moesi.io.procResp(1).peekBoolean())
+
+      do {
+        pokeProc(moesi, Seq(0, 2, 0, 0), Seq(0, 0, 0, 0), Seq(0, 4, 0, 0))
+        moesi.clock.step()
+      } while (!moesi.io.procResp(1).peekBoolean())
+
+      do {
+        pokeProc(moesi, Seq(2, 0, 0, 0), Seq(0, 0, 0, 0), Seq(5, 0, 0, 0))
+        moesi.clock.step()
+      } while (!moesi.io.procResp(0).peekBoolean())
+
+      do {
+        pokeProc(moesi, Seq(2, 0, 0, 0), Seq(1, 0, 0, 0), Seq(6, 0, 0, 0))
+        moesi.clock.step()
+      } while (!moesi.io.procResp(0).peekBoolean())
+
+      do {
+        pokeProc(moesi, Seq(2, 0, 0, 0), Seq(0, 0, 0, 0), Seq(7, 0, 0, 0))
+        moesi.clock.step()
+      } while (!moesi.io.procResp(0).peekBoolean())
+      endSign(moesi)
+    }
+  }
 
   "Test" should "pass" in {
     test(new MOESITop()).withAnnotations(Seq(WriteVcdAnnotation)) { moesi =>

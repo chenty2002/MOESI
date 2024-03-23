@@ -33,6 +33,7 @@ class Bus extends Module with HasMOESIParameters {
   val ackHold = RegInit(false.B)
   val busData = RegInit(0.U.asTypeOf(new BusData))
   val busDataBuffer = RegInit(0.U.asTypeOf(new BusData))
+  val replDataBuffer = RegInit(0.U.asTypeOf(new BusData))
   val pid = RegInit(procNum.U(procNumBits.W))
   val processing = RegInit(false.B)
   val memData = RegInit(0.U.asTypeOf(new BusData))
@@ -41,7 +42,7 @@ class Bus extends Module with HasMOESIParameters {
   val memHoldFlag = RegInit(false.B)
   val flushCleanFlag = RegInit(false.B)
   // indicating the bus is waiting for a response/ack from the memory/another cache
-//  io.hold := memHold || flushHold || ackHold
+  //  io.hold := memHold || flushHold || ackHold
   io.replFlag := false.B
   io.ackHold := ackHold
 
@@ -119,12 +120,6 @@ class Bus extends Module with HasMOESIParameters {
         when(busData.busTransaction =/= Repl) {
           printf("bus: Stage 9\n")
           memHold := true.B
-          // bus replace request, inform the Owned cache to become Modified
-        }.otherwise {
-          printf("bus: Stage 10\n")
-          flushCleanFlag := true.B
-          busData.state := Invalidated
-          io.replFlag := true.B
         }
       }.otherwise {
         printf("bus: Stage 11\n")
@@ -139,9 +134,15 @@ class Bus extends Module with HasMOESIParameters {
         printf("bus: TarPid: %d\n", tarPid)
         when(tarPid =/= procNum.U(procNumBits.W)) {
           when(busData.busTransaction === Repl) {
-            when(hasShared && busData.state === Owned) {
+            // replacing Owned cache, choose a Shared cache to become Owned
+            when(busData.state === Owned && io.l1CachesIn(tarPid).state === Shared) {
               printf("bus: Stage 12\n")
               busData.pid := tarPid
+              flushCleanFlag := true.B
+            }.elsewhen(!hasShared) {
+              // bus replace request, inform the Owned cache to become Modified
+              // special usage
+              busData.state := Invalidated
               flushCleanFlag := true.B
             }
           }.otherwise {
@@ -164,13 +165,23 @@ class Bus extends Module with HasMOESIParameters {
       }
       enableIO()
       flushCleanFlag := false.B
-    }.elsewhen(busDataBuffer.valid) {
-      processing := true.B
-      busDataBuffer := busDataBuffer
     }.otherwise {
-      busDataBuffer := io.l1CachesIn(OHToUInt(arbiter.io.grant))
+      val hasRepl = io.l1CachesIn.map { l1 =>
+        l1.valid && l1.busTransaction === Repl
+      }
+      when(busDataBuffer.busTransaction =/= Repl && hasRepl.reduce(_ || _)) {
+        val replPid = MuxCase(procNum.U(procNumBits.W),
+          hasRepl.zipWithIndex.map { repl =>
+            repl._1 -> repl._2.U(procNumBits.W)
+          })
+        busDataBuffer := io.l1CachesIn(replPid)
+      }.elsewhen(busDataBuffer.valid) {
+        processing := true.B
+        busDataBuffer := busDataBuffer
+      }.otherwise {
+        busDataBuffer := io.l1CachesIn(OHToUInt(arbiter.io.grant))
+      }
     }
-
     when(busData.valid) {
       printf("bus: Stage 15\n")
       when(busData.busTransaction === BusRd) {
@@ -187,13 +198,19 @@ class Bus extends Module with HasMOESIParameters {
         printf("bus: Stage 19\n")
         switch(busData.state) {
           is(Modified) {
+            // replacing Modified cache, only needs to write the data to memory
             memHold := true.B
             memWen := true.B
           }
           is(Owned) {
+            // replacing Owned cache, there is at least one Shared cache,
+            // choose one Shared cache to become Owned
             flushHold := true.B
           }
           is(Shared) {
+            // replacing Shared cache, there must be one Owned cache,
+            // if there are no other Shared caches, the Owned cache needs to become Modified
+            // if there exists another Shared cache, do nothing
             flushHold := true.B
           }
         }

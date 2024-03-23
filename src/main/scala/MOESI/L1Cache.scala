@@ -260,10 +260,14 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
             invAddr := io.busIn.addr
             // the Repl trans from the bus appears when another only Shared cache will be replaced and this cache is Owned
             // so this cache needs to become Modified
-          }.elsewhen(busTrans === Repl && busState === Invalidated) {
-            printf("pid %d: Stage 9\n", hostPid)
-            cacheStatus(busIndex) := Modified
-            printStatus(busIndex, Modified)
+          }.elsewhen(busTrans === Repl) {
+            when(busState === Invalidated) {
+              printf("pid %d: Stage 9\n", hostPid)
+              cacheStatus(busIndex) := Modified
+              printStatus(busIndex, Modified)
+            }.elsewhen(busState === Shared) {
+              fillBus(Flush, io.busIn, Owned)
+            }
           }
         }
         is(Exclusive) { // clean
@@ -311,8 +315,8 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
 //              printf("pid %d: Stage 17\n", hostPid)
 //              busOut := 0.U.asTypeOf(new BusData)
 //            }
-            // the Repl trans from the bus appears when another Owned cache will be replaced and this cache is Shared
-            // so this cache needs to flush to inform the bus that there is at least one Shared cache
+            // the Repl trans from the bus appears when another Owned/Shared cache will be replaced and this cache is Shared
+            // so this cache needs to flush to inform the bus that there exists one Shared cache
           }.elsewhen(busTrans === Repl) {
             printf("pid %d: Stage 18\n", hostPid)
             fillBus(Flush, io.busIn, Shared)

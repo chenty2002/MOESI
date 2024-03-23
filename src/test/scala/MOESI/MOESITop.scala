@@ -65,16 +65,17 @@ class MOESITop() extends Module with HasMOESIParameters with Formal {
     val match_tag = l1s.map { l1 =>
       Mux(l1.io.tagDirectory(index) === tag, l1.io.cacheStatus(index), Invalidated)
     }
+    val replacing = bus.io.l1CachesOut(0).valid && bus.io.l1CachesOut(0).busTransaction === Repl
     val exclusive = PopCount(match_tag.map(_ === Exclusive))
-    ast(exclusive <= 1.U, "")
+    ast(exclusive <= 1.U || replacing, "")
     val modified = PopCount(match_tag.map(_ === Modified))
-    ast(modified <= 1.U, "")
+    ast(modified <= 1.U || replacing, "")
     val owned = PopCount(match_tag.map(_ === Owned))
-    ast(owned <= 1.U, "")
+    ast(owned <= 1.U || replacing, "")
     val shared = PopCount(match_tag.map(_ === Shared))
-    ast(exclusive === 0.U || modified + owned + shared === 0.U, "")
-    ast(modified === 0.U || exclusive + owned + shared === 0.U, "")
-    ast(shared === 0.U || owned === 1.U, "")
+    ast(exclusive === 0.U || modified + owned + shared === 0.U || replacing, "")
+    ast(modified === 0.U || exclusive + owned + shared === 0.U || replacing, "")
+    ast(shared === 0.U || owned === 1.U || replacing, "")
   }
 
   def inputValid(cond: Bool, s: String = ""): Unit = {
