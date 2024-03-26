@@ -11,11 +11,11 @@ class PeekTest extends AnyFlatSpec with ChiselScalatestTester with HasMESIParame
       if (procOp(i) != 0) {
         mesi.io.procOp(i).poke(procOp(i).U(procOpBits.W))
         mesi.io.addr(i).poke(addr(i).U(addrBits.W))
-        mesi.io.cacheInput(i).poke(data(i).U(cacheBlockBits.W))
+        mesi.io.prData(i).poke(data(i).U(cacheBlockBits.W))
       } else {
         mesi.io.procOp(i).poke(0.U(procOpBits.W))
         mesi.io.addr(i).poke(0.U(addrBits.W))
-        mesi.io.cacheInput(i).poke(0.U(cacheBlockBits.W))
+        mesi.io.prData(i).poke(0.U(cacheBlockBits.W))
       }
     }
   }

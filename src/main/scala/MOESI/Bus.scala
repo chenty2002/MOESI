@@ -13,9 +13,7 @@ class Bus extends Module with HasMOESIParameters {
     val memOut = Output(new BusData)
     val memWen = Output(new Bool)
 
-    val ackHold = Output(new Bool)
-    val replFlag = Output(new Bool)
-
+    val replFlag = Output(Vec(procNum, new Bool))
     val validateBus = Input(Vec(procNum, new Bool))
 
     // DEBUG info
@@ -30,7 +28,6 @@ class Bus extends Module with HasMOESIParameters {
 
   val memHold = RegInit(false.B)
   val flushHold = RegInit(false.B)
-  val ackHold = RegInit(false.B)
   val busData = RegInit(0.U.asTypeOf(new BusData))
   val busDataBuffer = RegInit(0.U.asTypeOf(new BusData))
   val replDataBuffer = RegInit(0.U.asTypeOf(new BusData))
@@ -41,10 +38,7 @@ class Bus extends Module with HasMOESIParameters {
 
   val memHoldFlag = RegInit(false.B)
   val flushCleanFlag = RegInit(false.B)
-  // indicating the bus is waiting for a response/ack from the memory/another cache
-  //  io.hold := memHold || flushHold || ackHold
-  io.replFlag := false.B
-  io.ackHold := ackHold
+  io.replFlag.foreach(_ := false.B)
 
   def enableIO(): Unit = {
     processing := false.B
@@ -60,20 +54,8 @@ class Bus extends Module with HasMOESIParameters {
   memData := io.memIn
 
   printf("bus: Stage 1\n")
-  when(memHold || flushHold || ackHold) {
+  when(memHold || flushHold) {
     printf("bus: Stage 2\n")
-    // waiting for the ack from other caches
-    when(ackHold) {
-      when(busData.busTransaction === BusUpgrade || busData.busTransaction === BusRdX) {
-        when(io.l1CachesIn.map(_.busTransaction === Ack).reduce(_ || _)) {
-          ackHold := false.B
-          printf("bus: Stage 3\n")
-          when(!memHold && !ackHold) {
-            enableIO()
-          }
-        }
-      }
-    }
     // waiting for the response from the memory
     when(memHold && memData.valid && busData.valid && memData.addr === busData.addr) {
       printf("bus: Stage 4\n")
@@ -82,9 +64,9 @@ class Bus extends Module with HasMOESIParameters {
         memHold := false.B
         memWen := false.B
         when(memData.busTransaction === Repl) {
-          io.replFlag := true.B
+          io.replFlag.foreach(_ := true.B)
         }
-        when(!flushHold && !ackHold) {
+        when(!flushHold) {
           enableIO()
         }
       }.otherwise {
@@ -93,7 +75,7 @@ class Bus extends Module with HasMOESIParameters {
           printf("bus: Stage 6\n")
           memHold := false.B
           memHoldFlag := false.B
-          when(!flushHold && !ackHold) {
+          when(!flushHold) {
             enableIO()
           }
         }.otherwise {
@@ -151,7 +133,7 @@ class Bus extends Module with HasMOESIParameters {
           }
         }
         // the flush data on the bus needs to be cleared, but it needs to last one more beat
-        when(!memHold && !ackHold) {
+        when(!memHold) {
           flushCleanFlag := true.B
         }
       }
@@ -161,7 +143,7 @@ class Bus extends Module with HasMOESIParameters {
     memWen := false.B
     when(flushCleanFlag) {
       when(busData.busTransaction === Repl) {
-        io.replFlag := true.B
+        io.replFlag.foreach(_ := true.B)
       }
       enableIO()
       flushCleanFlag := false.B

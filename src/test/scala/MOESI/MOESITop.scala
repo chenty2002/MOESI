@@ -20,7 +20,7 @@ class MOESITop() extends Module with HasMOESIParameters with Formal {
     val procOp = Input(Vec(procNum, UInt(procOpBits.W)))
     val procResp = Output(Vec(procNum, new Bool))
     val addr = Input(Vec(procNum, UInt(addrBits.W)))
-    val cacheInput = Input(Vec(procNum, UInt(cacheBlockBits.W)))
+    val prData = Input(Vec(procNum, UInt(cacheBlockBits.W)))
     val cacheOutput = Output(Vec(procNum, UInt(cacheBlockBits.W)))
 
 
@@ -48,16 +48,15 @@ class MOESITop() extends Module with HasMOESIParameters with Formal {
     io.procResp(i) := l1s(i).io.response
     l1s(i).io.prAddr := io.addr(i)
     io.cacheOutput(i) := l1s(i).io.cacheOutput
-    l1s(i).io.cacheInput := io.cacheInput(i)
+    l1s(i).io.prData := io.prData(i)
     l1s(i).io.busIn := bus.io.l1CachesOut(i)
     bus.io.l1CachesIn(i) := l1s(i).io.busOut
     bus.io.validateBus(i) := l1s(i).io.validateBus
-    l1s(i).io.busReplFlag := bus.io.replFlag
-    l1s(i).io.busAckHold := bus.io.ackHold
+    l1s(i).io.busReplFlag := bus.io.replFlag(i)
 
     // DEBUG info
     io.cacheStatus(i) := l1s(i).io.cacheStatus
-    prBundle(i) := Cat(l1s(i).io.procOp, l1s(i).io.prAddr, l1s(i).io.cacheInput).asUInt
+    prBundle(i) := Cat(l1s(i).io.procOp, l1s(i).io.prAddr, l1s(i).io.prData).asUInt
   }
 
   def generateAssert(ast: (Bool, String) => Unit, addr: UInt): Unit = {
@@ -78,16 +77,6 @@ class MOESITop() extends Module with HasMOESIParameters with Formal {
     ast(shared === 0.U || owned === 1.U || replacing, "")
   }
 
-  def inputValid(cond: Bool, s: String = ""): Unit = {
-    for (i <- 0 until procNum) {
-      past(prBundle(i), 1) { pastIO =>
-        assert(cond ||
-          !(!l1s(i).io.prHlt ||
-            prBundle(i) === pastIO), s)
-      }
-    }
-  }
-
 //  (0 until 1 << addrBits).foreach { addr =>
 //    generateAssert(assert, addr.U(addrBits.W))
 //  }
@@ -99,7 +88,7 @@ class MOESITop() extends Module with HasMOESIParameters with Formal {
   // DEBUG info
   io.busData := bus.io.l1CachesOut(1)
   io.memory := mem.io.busResp
-  io.replFlag := bus.io.replFlag
+  io.replFlag := bus.io.replFlag(1)
   io.busValid := bus.io.valid
   io.procValid := l1s(1).io.validateBus
   io.busAddr := bus.io.l1CachesOut(1).addr

@@ -28,7 +28,7 @@ class L1Cache(val hostPid: UInt, val ps: MESIPS)(implicit p: Parameters) extends
 
       // the data requests
       val cacheOutput = Output(UInt(ep.cacheBlockBits.W))
-      val cacheInput = Input(UInt(ep.cacheBlockBits.W))
+      val prData = Input(UInt(ep.cacheBlockBits.W))
 
       val cacheStatus = Output(Vec(cacheBlockNum, UInt(stateBits.W)))
       val tagDirectory = Output(Vec(cacheBlockNum, UInt(ep.tagBits.W)))
@@ -274,8 +274,8 @@ class L1Cache(val hostPid: UInt, val ps: MESIPS)(implicit p: Parameters) extends
               }
               is(PrWr) {
                 printf("pid %d: Stage 26\n", hostPid)
-                L1Cache(index) := io.cacheInput
-                printf("pid %d: L1Cache(%d) -> %d\n", hostPid, index, io.cacheInput)
+                L1Cache(index) := io.prData
+                printf("pid %d: L1Cache(%d) -> %d\n", hostPid, index, io.prData)
                 tagDirectory(index) := tag
               }
             }
@@ -288,7 +288,7 @@ class L1Cache(val hostPid: UInt, val ps: MESIPS)(implicit p: Parameters) extends
               }
               is(PrWr) {
                 printf("pid %d: Stage 28\n", hostPid)
-                fillBus(BusUpgrade, tag, index, io.cacheInput, Owned)
+                fillBus(BusUpgrade, tag, index, io.prData, Owned)
                 validateBus := true.B
 
                 prHlt := true.B
@@ -303,8 +303,8 @@ class L1Cache(val hostPid: UInt, val ps: MESIPS)(implicit p: Parameters) extends
               }
               is(PrWr) {
                 printf("pid %d: Stage 30\n", hostPid)
-                L1Cache(index) := io.cacheInput
-                printf("pid %d: L1Cache(%d) -> %d\n", hostPid, index, io.cacheInput)
+                L1Cache(index) := io.prData
+                printf("pid %d: L1Cache(%d) -> %d\n", hostPid, index, io.prData)
                 tagDirectory(index) := tag
                 cacheStatus(index) := Modified
                 printStatus(busIndex, Modified)
@@ -319,7 +319,7 @@ class L1Cache(val hostPid: UInt, val ps: MESIPS)(implicit p: Parameters) extends
               }
               is(PrWr) {
                 printf("pid %d: Stage 32\n", hostPid)
-                fillBus(BusUpgrade, tag, index, io.cacheInput, Shared)
+                fillBus(BusUpgrade, tag, index, io.prData, Shared)
                 validateBus := true.B
 
                 prHlt := true.B
@@ -339,7 +339,7 @@ class L1Cache(val hostPid: UInt, val ps: MESIPS)(implicit p: Parameters) extends
           }
           is(PrWr) {
             printf("pid %d: Stage 34\n", hostPid)
-            fillBus(BusRdX, tag, index, io.cacheInput, Invalidated)
+            fillBus(BusRdX, tag, index, io.prData, Invalidated)
             validateBus := true.B
 
             prHlt := true.B

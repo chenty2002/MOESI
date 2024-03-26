@@ -14,7 +14,7 @@ class L1Cache(val hostPid: UInt) extends Module with HasMESIParameters {
 
     // the data requests
     val cacheOutput = Output(UInt(cacheBlockBits.W))
-    val cacheInput = Input(UInt(cacheBlockBits.W))
+    val prData = Input(UInt(cacheBlockBits.W))
 
     // the requests on the bus
     val busIn = Input(new BusData)
@@ -256,8 +256,8 @@ class L1Cache(val hostPid: UInt) extends Module with HasMESIParameters {
             }
             is(PrWr) {
               printf("pid %d: Stage 23\n", hostPid)
-              L1Cache(index) := io.cacheInput
-              printf("pid %d: L1Cache(%d) -> %d\n", hostPid, index, io.cacheInput)
+              L1Cache(index) := io.prData
+              printf("pid %d: L1Cache(%d) -> %d\n", hostPid, index, io.prData)
               tagDirectory(index) := tag
             }
           }
@@ -270,8 +270,8 @@ class L1Cache(val hostPid: UInt) extends Module with HasMESIParameters {
             }
             is(PrWr) {
               printf("pid %d: Stage 25\n", hostPid)
-              L1Cache(index) := io.cacheInput
-              printf("pid %d: L1Cache(%d) -> %d\n", hostPid, index, io.cacheInput)
+              L1Cache(index) := io.prData
+              printf("pid %d: L1Cache(%d) -> %d\n", hostPid, index, io.prData)
               tagDirectory(index) := tag
               cacheStatus(index) := Modified
               printStatus(busIndex, Modified)
@@ -286,7 +286,7 @@ class L1Cache(val hostPid: UInt) extends Module with HasMESIParameters {
             }
             is(PrWr) {
               printf("pid %d: Stage 27\n", hostPid)
-              fillBus(BusUpgrade, tag, index, io.cacheInput, Shared)
+              fillBus(BusUpgrade, tag, index, io.prData, Shared)
               validateBus := true.B
 
               prHlt := true.B
@@ -306,7 +306,7 @@ class L1Cache(val hostPid: UInt) extends Module with HasMESIParameters {
         }
         is(PrWr) {
           printf("pid %d: Stage 29\n", hostPid)
-          fillBus(BusRdX, tag, index, io.cacheInput, Invalidated)
+          fillBus(BusRdX, tag, index, io.prData, Invalidated)
           validateBus := true.B
 
           prHlt := true.B

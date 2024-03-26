@@ -46,7 +46,7 @@ class MOESITop(implicit p: Parameters) extends LazyModule with HasMOESIParameter
       val procOp = Input(Vec(procNum, UInt(procOpBits.W)))
       val procHlt = Output(Vec(procNum, new Bool))
       val addr = Input(Vec(procNum, UInt(4.W)))
-      val cacheInput = Input(Vec(procNum, UInt(8.W)))
+      val prData = Input(Vec(procNum, UInt(8.W)))
       val cacheOutput = Output(Vec(procNum, UInt(8.W)))
     })
 
@@ -55,7 +55,7 @@ class MOESITop(implicit p: Parameters) extends LazyModule with HasMOESIParameter
       io.procHlt(i) := l1s(i).module.io.prHlt
       l1s(i).module.io.prAddr := io.addr(i)
       io.cacheOutput(i) := l1s(i).module.io.cacheOutput
-      l1s(i).module.io.cacheInput := io.cacheInput(i)
+      l1s(i).module.io.prData := io.prData(i)
     }
 
     val ep = new MESIPS(2, 2, 8)

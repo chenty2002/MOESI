@@ -18,7 +18,7 @@ class MESITop() extends Module with HasMESIParameters {
     val procOp = Input(Vec(procNum, UInt(procOpBits.W)))
     val procHlt = Output(Vec(procNum, new Bool))
     val addr = Input(Vec(procNum, UInt(addrBits.W)))
-    val cacheInput = Input(Vec(procNum, UInt(cacheBlockBits.W)))
+    val prData = Input(Vec(procNum, UInt(cacheBlockBits.W)))
     val cacheOutput = Output(Vec(procNum, UInt(cacheBlockBits.W)))
 
 
@@ -44,7 +44,7 @@ class MESITop() extends Module with HasMESIParameters {
     io.procHlt(i) := l1s(i).io.prHlt
     l1s(i).io.prAddr := io.addr(i)
     io.cacheOutput(i) := l1s(i).io.cacheOutput
-    l1s(i).io.cacheInput := io.cacheInput(i)
+    l1s(i).io.prData := io.prData(i)
     l1s(i).io.busIn := bus.io.l1CachesOut(i)
     bus.io.l1CachesIn(i) := l1s(i).io.busOut
     bus.io.validateBus(i) := l1s(i).io.validateBus
