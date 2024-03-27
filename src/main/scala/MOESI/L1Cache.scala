@@ -35,9 +35,6 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
   val holdAns = RegInit(false.B)
   val ansBus = RegInit(0.U.asTypeOf(new BusData))
 
-  val busInvalidate = WireDefault(false.B)
-  val invAddr = WireDefault(0.U(addrBits.W))
-
   val prOp = RegInit(0.U(procOpBits.W))
   val prAddr = RegInit(0.U(addrBits.W))
   val prData = RegInit(0.U(cacheBlockBits.W))
@@ -231,31 +228,21 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
             cacheStatus(busIndex) := Owned
             printStatus(busIndex, Owned)
             fillBus(Flush, io.busIn, Modified)
-          }.elsewhen(busTrans === BusRdX) {
+          }.elsewhen(busTrans === BusRdX || busTrans === BusUpgrade) {
             printf("pid %d: Stage 5\n", hostPid)
             // invalidated cache writing a modified cache
             cacheStatus(busIndex) := Invalidated
             printStatus(busIndex, Invalidated)
-            busInvalidate := true.B
-            invAddr := io.busIn.addr
           }
         }
         is(Owned) { // dirty
           printf("pid %d: Stage 6\n", hostPid)
           when(busTrans === BusRd) {
             fillBus(Flush, io.busIn, Owned)
-          }.elsewhen(busTrans === BusRdX) {
+          }.elsewhen(busTrans === BusRdX || busTrans === BusUpgrade) {
             printf("pid %d: Stage 7\n", hostPid)
             cacheStatus(busIndex) := Invalidated
             printStatus(busIndex, Invalidated)
-            busInvalidate := true.B
-            invAddr := io.busIn.addr
-          }.elsewhen(busTrans === BusUpgrade) {
-            printf("pid %d: Stage 8\n", hostPid)
-            cacheStatus(busIndex) := Invalidated
-            printStatus(busIndex, Invalidated)
-            busInvalidate := true.B
-            invAddr := io.busIn.addr
             // the Repl trans from the bus appears when another only Shared cache will be replaced and this cache is Owned
             // so this cache needs to become Modified
           }.elsewhen(busTrans === Repl) {
@@ -275,12 +262,10 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
             cacheStatus(busIndex) := Owned
             printStatus(busIndex, Owned)
             fillBus(Flush, io.busIn, Exclusive)
-          }.elsewhen(busTrans === BusRdX) {
+          }.elsewhen(busTrans === BusRdX || busTrans === BusUpgrade) {
             printf("pid %d: Stage 12\n", hostPid)
             cacheStatus(busIndex) := Invalidated
             printStatus(busIndex, Invalidated)
-            busInvalidate := true.B
-            invAddr := io.busIn.addr
           }
         }
         is(Shared) { // clean
@@ -289,20 +274,11 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
             printf("pid %d: Stage 14\n", hostPid)
             // response for a read request
             fillBus(Flush, io.busIn, Shared)
-          }.elsewhen(busTrans === BusRdX) {
+          }.elsewhen(busTrans === BusRdX || busTrans === BusUpgrade) {
             printf("pid %d: Stage 15\n", hostPid)
             // invalidated cache reading shared cache
             cacheStatus(busIndex) := Invalidated
             printStatus(busIndex, Invalidated)
-            busInvalidate := true.B
-            invAddr := io.busIn.addr
-          }.elsewhen(busTrans === BusUpgrade) {
-            printf("pid %d: Stage 16\n", hostPid)
-            // shared cache writing shared cache
-            cacheStatus(busIndex) := Invalidated
-            printStatus(busIndex, Invalidated)
-            busInvalidate := true.B
-            invAddr := io.busIn.addr
           }.elsewhen(busTrans === Repl) {
             printf("pid %d: Stage 18\n", hostPid)
             fillBus(Flush, io.busIn, Shared)
@@ -425,7 +401,11 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
     printf("pid %d: Stage 29\n", hostPid)
     // the request from the processor hits
     when(isHit(prAddr)) {
-      when(busInvalidate && invAddr === prAddr) {
+      // when the request on the bus invalidates the same address as the processor's,
+      // it needs to delay the processor request
+      when(guestId =/= hostPid && busValid && isHit(busAddr) &&
+        (cacheStatus(busIndex) =/= Invalidated && (busTrans === BusRdX || busTrans === BusUpgrade)) &&
+        io.busIn.addr === prAddr) {
         processing := true.B
         ioPrOp := ioPrOp
         ioPrAddr := ioPrAddr

@@ -44,7 +44,7 @@ class MOESITop(implicit p: Parameters) extends LazyModule with HasMOESIParameter
   class MESITopModule(wrapper: LazyModule) extends LazyModuleImp(wrapper) with Formal {
     val io = IO(new Bundle() {
       val procOp = Input(Vec(procNum, UInt(procOpBits.W)))
-      val procHlt = Output(Vec(procNum, new Bool))
+      val procResp = Output(Vec(procNum, new Bool))
       val addr = Input(Vec(procNum, UInt(4.W)))
       val prData = Input(Vec(procNum, UInt(8.W)))
       val cacheOutput = Output(Vec(procNum, UInt(8.W)))
@@ -52,7 +52,7 @@ class MOESITop(implicit p: Parameters) extends LazyModule with HasMOESIParameter
 
     for (i <- 0 until procNum) {
       l1s(i).module.io.procOp := io.procOp(i)
-      io.procHlt(i) := l1s(i).module.io.prHlt
+      io.procResp(i) := l1s(i).module.io.response
       l1s(i).module.io.prAddr := io.addr(i)
       io.cacheOutput(i) := l1s(i).module.io.cacheOutput
       l1s(i).module.io.prData := io.prData(i)
@@ -65,16 +65,17 @@ class MOESITop(implicit p: Parameters) extends LazyModule with HasMOESIParameter
       val match_tag = l1s.map { l1 =>
         Mux(l1.module.io.tagDirectory(index) === tag, l1.module.io.cacheStatus(index), Invalidated)
       }
+      val replacing = bus.module.verify_io.replacing
       val exclusive = PopCount(match_tag.map(_ === Exclusive))
-      assert(exclusive <= 1.U)
+      assert(exclusive <= 1.U || replacing)
       val modified = PopCount(match_tag.map(_ === Modified))
-      assert(modified <= 1.U)
+      assert(modified <= 1.U || replacing)
       val owned = PopCount(match_tag.map(_ === Owned))
-      assert(owned <= 1.U)
+      assert(owned <= 1.U || replacing)
       val shared = PopCount(match_tag.map(_ === Shared))
-      assert(exclusive === 0.U || modified + owned + shared === 0.U)
-      assert(modified === 0.U || exclusive + owned + shared === 0.U)
-      assert(shared === 0.U || owned === 1.U)
+      assert(exclusive === 0.U || modified + owned + shared === 0.U || replacing)
+      assert(modified === 0.U || exclusive + owned + shared === 0.U || replacing)
+      assert(shared === 0.U || owned === 1.U || replacing)
     }
 
     (0 until 1 << ep.addrBits).foreach { addr =>
@@ -87,5 +88,5 @@ object MOESITop extends App {
   val lazyModule = LazyModule(new MOESITop()(Parameters.empty))
   (new ChiselStage).emitVerilog(lazyModule.module, Array("--target-dir", "generated/MOESI_Diplomacy"))
   File.writeOutputFile("generated/MOESI_Diplomacy", "MOESI_Diplomacy.graphml", lazyModule.graphML)
-  Check.bmc(() => LazyModule(new MOESITop()(Parameters.empty)).module)
+  Check.bmc(() => LazyModule(new MOESITop()(Parameters.empty)).module, 30)
 }

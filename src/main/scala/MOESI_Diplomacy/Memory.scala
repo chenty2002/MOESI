@@ -1,6 +1,7 @@
 package MOESI_Diplomacy
 
 import chisel3._
+import chisel3.util._
 import freechips.rocketchip.diplomacy._
 import org.chipsalliance.cde.config.Parameters
 
@@ -21,17 +22,17 @@ class Memory(val ps: MESIPS)(implicit p: Parameters) extends LazyModule with Has
     val mem = SyncReadMem(1 << ep.addrBits, UInt(ep.cacheBlockBits.W))
 
     when(busIn.valid) {
-      val addr = busIn.addrBundle.addr
+      val addr = Cat(busIn.addrBundle.tag, busIn.addrBundle.index)
       val wr = busIn.addrBundle.cacheBlock
       busResp.foreach(_ := busIn)
-      busResp.foreach(_.pid := procNum.U(procNumBits.W))
+      //    io.busResp.pid := procNum.U(procNumBits.W)
 
       when(wen) {
         mem.write(addr, wr)
         printf("memory: writes %d into %d\n", wr, addr)
         busResp.foreach(_.addrBundle.cacheBlock := wr)
-        when(busIn.busTransaction === BusUpgrade) {
-          busResp.foreach(_.busTransaction := BusUpgrade)
+        when(busIn.busTransaction === BusUpgrade || busIn.busTransaction === Repl) {
+          busResp.foreach(_.busTransaction := busIn.busTransaction)
         }.otherwise {
           busResp.foreach(_.busTransaction := Invalid)
         }
