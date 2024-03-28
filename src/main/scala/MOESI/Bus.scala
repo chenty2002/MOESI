@@ -105,13 +105,15 @@ class Bus extends Module with HasMOESIParameters {
         }
       }.otherwise {
         printf("bus: Stage 11\n")
-        val countShared = PopCount(io.l1CachesIn.zip(flushFlag).map { l1 =>
-          l1._1.state === Shared && l1._2
+        val countShared = PopCount(io.l1CachesIn.zip(flushFlag).map {
+          case (l1In, flush) =>
+            l1In.state === Shared && flush
         })
         // get the pid of the responded cache
         val tarPid = MuxCase(procNum.U(procNumBits.W),
-          flushFlag.zipWithIndex.map { flush =>
-            flush._1 -> flush._2.U(procNumBits.W)
+          flushFlag.zipWithIndex.map {
+            case (flushAndShared, i) =>
+              flushAndShared -> i.U(procNumBits.W)
           })
         printf("bus: TarPid: %d\n", tarPid)
         when(tarPid =/= procNum.U(procNumBits.W)) {
@@ -159,8 +161,9 @@ class Bus extends Module with HasMOESIParameters {
       }
       when(busDataBuffer.busTransaction =/= Repl && hasRepl.reduce(_ || _)) {
         val replPid = MuxCase(procNum.U(procNumBits.W),
-          hasRepl.zipWithIndex.map { repl =>
-            repl._1 -> repl._2.U(procNumBits.W)
+          hasRepl.zipWithIndex.map {
+            case (replacing, i) =>
+              replacing -> i.U(procNumBits.W)
           })
         busDataBuffer := io.l1CachesIn(replPid)
       }.elsewhen(busDataBuffer.valid) {

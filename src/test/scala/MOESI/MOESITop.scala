@@ -32,7 +32,6 @@ class MOESITop() extends Module with HasMOESIParameters with Formal {
     val busValid = Output(new Bool)
     val procValid = Output(new Bool)
 
-    val addrEq = Output(new Bool)
     val cacheStatus = Output(Vec(procNum, Vec(cacheBlockNum, UInt(stateBits.W))))
     val memAddr = Output(UInt(addrBits.W))
   })
@@ -54,32 +53,57 @@ class MOESITop() extends Module with HasMOESIParameters with Formal {
     bus.io.validateBus(i) := l1s(i).io.validateBus
     l1s(i).io.busReplFlag := bus.io.replFlag(i)
 
-    // DEBUG info
+    // Verify interface
     io.cacheStatus(i) := l1s(i).io.cacheStatus
     prBundle(i) := Cat(l1s(i).io.procOp, l1s(i).io.prAddr, l1s(i).io.prData).asUInt
   }
 
-  def generateAssert(ast: (Bool, String) => Unit, addr: UInt): Unit = {
+  def generateAssert(addr: UInt): Unit = {
     val (tag, index) = parseAddr(addr)
-    val match_tag = l1s.map { l1 =>
+
+    val replacing = bus.io.l1CachesOut(0).valid && bus.io.l1CachesOut(0).busTransaction === Repl
+
+    // the status of the addr in every cache
+    val match_tag_status = l1s.map { l1 =>
       Mux(l1.io.tagDirectory(index) === tag, l1.io.cacheStatus(index), Invalidated)
     }
-    val replacing = bus.io.l1CachesOut(0).valid && bus.io.l1CachesOut(0).busTransaction === Repl
-    val exclusive = PopCount(match_tag.map(_ === Exclusive))
-    ast(exclusive <= 1.U || replacing, "")
-    val modified = PopCount(match_tag.map(_ === Modified))
-    ast(modified <= 1.U || replacing, "")
-    val owned = PopCount(match_tag.map(_ === Owned))
-    ast(owned <= 1.U || replacing, "")
-    val shared = PopCount(match_tag.map(_ === Shared))
-    ast(exclusive === 0.U || modified + owned + shared === 0.U || replacing, "")
-    ast(modified === 0.U || exclusive + owned + shared === 0.U || replacing, "")
-    ast(shared === 0.U || owned === 1.U || replacing, "")
+    // the number of caches of addr for each status
+    val exclusive = PopCount(match_tag_status.map(_ === Exclusive))
+    assert(exclusive <= 1.U || replacing)
+    val modified = PopCount(match_tag_status.map(_ === Modified))
+    assert(modified <= 1.U || replacing)
+    val owned = PopCount(match_tag_status.map(_ === Owned))
+    assert(owned <= 1.U || replacing)
+    val shared = PopCount(match_tag_status.map(_ === Shared))
+    assert(exclusive === 0.U || modified + owned + shared === 0.U || replacing)
+    assert(modified === 0.U || exclusive + owned + shared === 0.U || replacing)
+    assert(shared === 0.U || owned === 1.U || replacing)
+
+    // the data vector of the cache lines of index
+    val l1Data = VecInit(l1s.map(_.io.cacheData(index)))
+
+    // choose a valid cache of this addr
+    val pivot = MuxCase(procNum.U(procNumBits.W),
+      match_tag_status.map(_ =/= Invalidated).zipWithIndex.map {
+        case (status, i) =>
+          status -> i.U(procNumBits.W)
+      })
+    val pivot_data = Mux(pivot < procNum.U, l1Data(pivot), 0.U)
+
+    // all the other caches of addr must have the same data
+    val match_tag_data = match_tag_status.zip(l1Data).zipWithIndex.map {
+      case ((status, data), i) =>
+        Mux(status =/= Invalidated && pivot =/= i.U(procNumBits.W),
+          Mux(data === pivot_data, true.B, false.B),
+          true.B
+        )
+    }
+    assert(pivot === procNum.U || match_tag_data.reduce(_ && _))
   }
 
-//  (0 until 1 << addrBits).foreach { addr =>
-//    generateAssert(assert, addr.U(addrBits.W))
-//  }
+  (0 until 1 << addrBits).foreach { addr =>
+    generateAssert(addr.U(addrBits.W))
+  }
 
   bus.io.memIn := mem.io.busResp
   mem.io.busIn := bus.io.memOut
@@ -92,7 +116,6 @@ class MOESITop() extends Module with HasMOESIParameters with Formal {
   io.busValid := bus.io.valid
   io.procValid := l1s(1).io.validateBus
   io.busAddr := bus.io.l1CachesOut(1).addr
-  io.addrEq := l1s(1).io.addrEq
   io.memAddr := mem.io.memAddr
 }
 

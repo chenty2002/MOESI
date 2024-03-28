@@ -20,8 +20,8 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
     // the cache needs to use the bus
     val validateBus = Output(new Bool)
 
-    // DEBUG info
-    val addrEq = Output(new Bool)
+    // Verify interface
+    val cacheData = Output(Vec(cacheBlockNum, UInt(cacheBlockBits.W)))
     val cacheStatus = Output(Vec(cacheBlockNum, UInt(stateBits.W)))
     val tagDirectory = Output(Vec(cacheBlockNum, UInt(tagBits.W)))
   })
@@ -126,7 +126,7 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
     busValid,
     busAddr)
 
-  io.addrEq := busAddr === prAddr
+  io.cacheData := L1Cache
   io.cacheStatus := cacheStatus
   io.tagDirectory := tagDirectory
 

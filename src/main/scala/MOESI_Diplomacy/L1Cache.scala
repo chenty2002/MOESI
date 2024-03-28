@@ -28,7 +28,8 @@ class L1Cache(val hostPid: UInt, val ps: MESIPS)(implicit p: Parameters) extends
       val cacheOutput = Output(UInt(ep.cacheBlockBits.W))
       val response = Output(new Bool)
 
-      // DEBUG info
+      // Verify interface
+      val cacheData = Output(Vec(cacheBlockNum, UInt(ep.cacheBlockBits.W)))
       val cacheStatus = Output(Vec(cacheBlockNum, UInt(stateBits.W)))
       val tagDirectory = Output(Vec(cacheBlockNum, UInt(ep.tagBits.W)))
     })
@@ -134,6 +135,7 @@ class L1Cache(val hostPid: UInt, val ps: MESIPS)(implicit p: Parameters) extends
       busValid,
       busAddr)
 
+    io.cacheData := L1Cache
     io.cacheStatus := cacheStatus
     io.tagDirectory := tagDirectory
 
