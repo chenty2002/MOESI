@@ -342,12 +342,20 @@ class L1Cache(val hostPid: UInt, val ps: MESIPS)(implicit p: Parameters) extends
     }
 
     // the Repl trans from the bus appears when another Owned cache will be replaced and this cache is Shared
-    // and this cache has been chosen to become Owned
+    // and this cache has been chosen to upgrade
     when(guestId === hostPid && busValid && busTrans === Repl) {
       printf("pid %d: Stage 28\n", hostPid)
       when(cacheStatus(busIndex) === Shared) {
-        cacheStatus(busIndex) := Owned
-        printStatus(busIndex, Owned)
+        // when there are at least two Shared cache, this chosen cache becomes Owned
+        when(busState === Owned) {
+          cacheStatus(busIndex) := Owned
+          printStatus(busIndex, Owned)
+          // SPECIAL USE
+          // when there is only one Shared cache, this chose cache becomes Exclusive
+        }.otherwise {
+          cacheStatus(busIndex) := Exclusive
+          printStatus(busIndex, Exclusive)
+        }
       }
     }
 

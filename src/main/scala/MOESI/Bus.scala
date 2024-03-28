@@ -105,9 +105,9 @@ class Bus extends Module with HasMOESIParameters {
         }
       }.otherwise {
         printf("bus: Stage 11\n")
-        val hasShared = io.l1CachesIn.zip(flushFlag).map { l1 =>
+        val countShared = PopCount(io.l1CachesIn.zip(flushFlag).map { l1 =>
           l1._1.state === Shared && l1._2
-        }.reduce(_ || _)
+        })
         // get the pid of the responded cache
         val tarPid = MuxCase(procNum.U(procNumBits.W),
           flushFlag.zipWithIndex.map { flush =>
@@ -116,12 +116,18 @@ class Bus extends Module with HasMOESIParameters {
         printf("bus: TarPid: %d\n", tarPid)
         when(tarPid =/= procNum.U(procNumBits.W)) {
           when(busData.busTransaction === Repl) {
-            // replacing Owned cache, choose a Shared cache to become Owned
+            // replacing Owned cache, choose a Shared cache to upgrade
             when(busData.state === Owned && io.l1CachesIn(tarPid).state === Shared) {
               printf("bus: Stage 12\n")
               busData.pid := tarPid
+              // SPECIAL USE
+              // when there is only one Shared cache, it needs to become Exclusive
+              // otherwise, it only needs to become Owned
+              when(countShared === 1.U) {
+                busData.state := Invalidated
+              }
               flushCleanFlag := true.B
-            }.elsewhen(!hasShared) {
+            }.elsewhen(countShared === 0.U) {
               // bus replace request, inform the Owned cache to become Modified
               // special usage
               busData.state := Invalidated
@@ -186,7 +192,8 @@ class Bus extends Module with HasMOESIParameters {
           }
           is(Owned) {
             // replacing Owned cache, there is at least one Shared cache,
-            // choose one Shared cache to become Owned
+            // choose one Shared cache to become Owned if there is at least two Shared cache,
+            // choose the Shared cache to become Exclusive if there is only one Shared cache
             flushHold := true.B
           }
           is(Shared) {
