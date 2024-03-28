@@ -140,7 +140,6 @@ class L1Cache(val hostPid: UInt, val ps: MESIPS)(implicit p: Parameters) extends
     io.tagDirectory := tagDirectory
 
     def enableIO(): Unit = {
-      //    resp := true.B
       processing := false.B
       ioPrOp := 0.U
       ioPrAddr := 0.U
@@ -328,6 +327,16 @@ class L1Cache(val hostPid: UInt, val ps: MESIPS)(implicit p: Parameters) extends
       }
     }
 
+    // when this is true, the status of the addr corresponding to the bus will be invalidated the next beat
+    val invalidateNext = guestId =/= hostPid && busValid && isHit(busAddr) &&
+      (cacheStatus(busIndex) =/= Invalidated && (busTrans === BusRdX || busTrans === BusUpgrade))
+
+    // when this is true, the cache will be answering the bus the next beat
+    val answeringNext = guestId =/= hostPid && busValid && isHit(busAddr) &&
+      ((cacheStatus(busIndex) =/= Invalidated && busTrans === BusRd) ||
+        (cacheStatus(busIndex) === Owned && busTrans === Repl && busState === Shared) ||
+        (cacheStatus(busIndex) === Shared && busTrans === Repl))
+
     // the replacing transaction has been informed to other caches, this cache can be replaced
     when(replacing && replFlag) {
       printf("pid %d: Stage 22\n", hostPid)
@@ -436,12 +445,14 @@ class L1Cache(val hostPid: UInt, val ps: MESIPS)(implicit p: Parameters) extends
                   enableIO()
                 }
                 is(PrWr) {
-                  printf("pid %d: Stage 31\n", hostPid)
-                  L1Cache(index) := prData
-                  printf("pid %d: L1Cache(%d) -> %d\n", hostPid, index, prData)
-                  tagDirectory(index) := tag
-                  io.response := true.B
-                  enableIO()
+                  when(!answeringNext) {
+                    printf("pid %d: Stage 31\n", hostPid)
+                    L1Cache(index) := prData
+                    printf("pid %d: L1Cache(%d) -> %d\n", hostPid, index, prData)
+                    tagDirectory(index) := tag
+                    io.response := true.B
+                    enableIO()
+                  }
                 }
               }
             }
@@ -471,14 +482,16 @@ class L1Cache(val hostPid: UInt, val ps: MESIPS)(implicit p: Parameters) extends
                   enableIO()
                 }
                 is(PrWr) {
-                  printf("pid %d: Stage 35\n", hostPid)
-                  L1Cache(index) := prData
-                  printf("pid %d: L1Cache(%d) -> %d\n", hostPid, index, prData)
-                  tagDirectory(index) := tag
-                  cacheStatus(index) := Modified
-                  printStatus(index, Modified)
-                  io.response := true.B
-                  enableIO()
+                  when(!answeringNext) {
+                    printf("pid %d: Stage 35\n", hostPid)
+                    L1Cache(index) := prData
+                    printf("pid %d: L1Cache(%d) -> %d\n", hostPid, index, prData)
+                    tagDirectory(index) := tag
+                    cacheStatus(index) := Modified
+                    printStatus(index, Modified)
+                    io.response := true.B
+                    enableIO()
+                  }
                 }
               }
             }

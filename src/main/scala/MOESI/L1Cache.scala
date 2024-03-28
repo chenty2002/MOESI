@@ -131,7 +131,6 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
   io.tagDirectory := tagDirectory
 
   def enableIO(): Unit = {
-//    resp := true.B
     processing := false.B
     ioPrOp := 0.U
     ioPrAddr := 0.U
@@ -319,6 +318,16 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
     }
   }
 
+  // when this is true, the status of the addr corresponding to the bus will be invalidated the next beat
+  val invalidateNext = guestId =/= hostPid && busValid && isHit(busAddr) &&
+    (cacheStatus(busIndex) =/= Invalidated && (busTrans === BusRdX || busTrans === BusUpgrade))
+
+  // when this is true, the cache will be answering the bus the next beat
+  val answeringNext = guestId =/= hostPid && busValid && isHit(busAddr) &&
+    ((cacheStatus(busIndex) =/= Invalidated && busTrans === BusRd) ||
+      (cacheStatus(busIndex) === Owned && busTrans === Repl && busState === Shared) ||
+      (cacheStatus(busIndex) === Shared && busTrans === Repl))
+
   // the replacing transaction has been informed to other caches, this cache can be replaced
   when(replacing && io.busReplFlag) {
     printf("pid %d: Stage 22\n", hostPid)
@@ -411,9 +420,7 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
     when(isHit(prAddr)) {
       // when the request on the bus invalidates the same address as the processor's,
       // it needs to delay the processor request
-      when(guestId =/= hostPid && busValid && isHit(busAddr) &&
-        (cacheStatus(busIndex) =/= Invalidated && (busTrans === BusRdX || busTrans === BusUpgrade)) &&
-        io.busIn.addr === prAddr) {
+      when(invalidateNext && io.busIn.addr === prAddr) {
         processing := true.B
         ioPrOp := ioPrOp
         ioPrAddr := ioPrAddr
@@ -429,12 +436,14 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
                 enableIO()
               }
               is(PrWr) {
-                printf("pid %d: Stage 31\n", hostPid)
-                L1Cache(index) := prData
-                printf("pid %d: L1Cache(%d) -> %d\n", hostPid, index, prData)
-                tagDirectory(index) := tag
-                io.response := true.B
-                enableIO()
+                when(!answeringNext) {
+                  printf("pid %d: Stage 31\n", hostPid)
+                  L1Cache(index) := prData
+                  printf("pid %d: L1Cache(%d) -> %d\n", hostPid, index, prData)
+                  tagDirectory(index) := tag
+                  io.response := true.B
+                  enableIO()
+                }
               }
             }
           }
@@ -464,14 +473,16 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
                 enableIO()
               }
               is(PrWr) {
-                printf("pid %d: Stage 35\n", hostPid)
-                L1Cache(index) := prData
-                printf("pid %d: L1Cache(%d) -> %d\n", hostPid, index, prData)
-                tagDirectory(index) := tag
-                cacheStatus(index) := Modified
-                printStatus(index, Modified)
-                io.response := true.B
-                enableIO()
+                when(!answeringNext) {
+                  printf("pid %d: Stage 35\n", hostPid)
+                  L1Cache(index) := prData
+                  printf("pid %d: L1Cache(%d) -> %d\n", hostPid, index, prData)
+                  tagDirectory(index) := tag
+                  cacheStatus(index) := Modified
+                  printStatus(index, Modified)
+                  io.response := true.B
+                  enableIO()
+                }
               }
             }
           }
