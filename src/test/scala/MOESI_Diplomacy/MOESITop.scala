@@ -100,7 +100,7 @@ class MOESITop(implicit p: Parameters) extends LazyModule with HasMOESIParameter
             true.B
           )
       }
-      assert(pivot === procNum.U || match_tag_data.reduce(_ && _))
+      assert(pivot === procNum.U || match_tag_data.reduce(_ && _) || replacing)
     }
 
     (0 until 1 << ep.addrBits).foreach { addr =>

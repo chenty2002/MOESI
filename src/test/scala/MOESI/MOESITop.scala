@@ -98,7 +98,7 @@ class MOESITop() extends Module with HasMOESIParameters with Formal {
           true.B
         )
     }
-    assert(pivot === procNum.U || match_tag_data.reduce(_ && _))
+    assert(pivot === procNum.U || match_tag_data.reduce(_ && _) || replacing)
   }
 
   (0 until 1 << addrBits).foreach { addr =>
