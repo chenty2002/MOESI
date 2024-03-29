@@ -71,16 +71,15 @@ class MOESITop() extends Module with HasMOESIParameters with Formal {
     }
     // the number of caches of addr for each status
     val exclusive = PopCount(match_tag_status.map(_ === Exclusive))
+    assert(exclusive <= 1.U || replacing)
     val modified = PopCount(match_tag_status.map(_ === Modified))
+    assert(modified <= 1.U || replacing)
     val owned = PopCount(match_tag_status.map(_ === Owned))
+    assert(owned <= 1.U || replacing)
     val shared = PopCount(match_tag_status.map(_ === Shared))
-    assert(
-      replacing ||
-        (exclusive === 1.U && modified === 0.U && owned === 0.U && shared === 0.U) ||
-        (exclusive === 0.U && modified === 1.U && owned === 0.U && shared === 0.U) ||
-        (exclusive === 0.U && modified === 0.U && owned === 1.U && shared =/= 0.U) ||
-        (exclusive === 0.U && modified === 0.U && owned === 0.U && shared === 0.U)
-    )
+    assert(exclusive === 0.U || modified + owned + shared === 0.U || replacing)
+    assert(modified === 0.U || exclusive + owned + shared === 0.U || replacing)
+    assert(shared === 0.U || owned === 1.U || replacing)
 
     // the data vector of the cache lines of index
     val l1Data = VecInit(l1s.map(_.io.cacheData(index)))
@@ -117,6 +116,6 @@ class MOESITop() extends Module with HasMOESIParameters with Formal {
 }
 
 object MOESITop extends App {
-  (new ChiselStage).emitVerilog(new MOESITop(), Array("--target-dir", "generated/MOESI"))
+  (new ChiselStage).emitSystemVerilog(new MOESITop(), Array("--target-dir", "generated/MOESI"))
   //  Check.bmc(() => new MOESITop)
 }
