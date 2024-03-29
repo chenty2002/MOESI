@@ -8,7 +8,7 @@ import chiselFv._
 import freechips.rocketchip.diplomacy._
 import org.chipsalliance.cde.config.Parameters
 
-class MOESITop(implicit p: Parameters) extends LazyModule with HasMOESIParameters {
+class MOESIDiplomacyTop(implicit p: Parameters) extends LazyModule with HasMOESIParameters {
   /*
   proc0   proc1   proc2   proc3
     |       |       |       |
@@ -67,40 +67,37 @@ class MOESITop(implicit p: Parameters) extends LazyModule with HasMOESIParameter
 
       // the status of the addr in every cache
       val match_tag_status = l1s.map { l1 =>
-        Mux(l1.module.io.tagDirectory(index) === tag, l1.module.io.cacheStatus(index), Invalidated)
+        Mux(l1.module.io.tagDirectory(index) === tag,
+          l1.module.io.cacheStatus(index),
+          Invalidated)
       }
       // the number of caches of addr for each status
       val exclusive = PopCount(match_tag_status.map(_ === Exclusive))
-      assert(exclusive <= 1.U || replacing)
       val modified = PopCount(match_tag_status.map(_ === Modified))
-      assert(modified <= 1.U || replacing)
       val owned = PopCount(match_tag_status.map(_ === Owned))
-      assert(owned <= 1.U || replacing)
       val shared = PopCount(match_tag_status.map(_ === Shared))
-      assert(exclusive === 0.U || modified + owned + shared === 0.U || replacing)
-      assert(modified === 0.U || exclusive + owned + shared === 0.U || replacing)
-      assert(shared === 0.U || owned === 1.U || replacing)
+      assert(
+        replacing ||
+          (exclusive === 1.U && modified === 0.U && owned === 0.U && shared === 0.U) ||
+          (exclusive === 0.U && modified === 1.U && owned === 0.U && shared === 0.U) ||
+          (exclusive === 0.U && modified === 0.U && owned === 1.U && shared =/= 0.U) ||
+          (exclusive === 0.U && modified === 0.U && owned === 0.U && shared === 0.U)
+      )
 
       // the data vector of the cache lines of index
       val l1Data = VecInit(l1s.map(_.module.io.cacheData(index)))
-
-      // choose a valid cache of this addr
-      val pivot = MuxCase(procNum.U(procNumBits.W),
-        match_tag_status.map(_ =/= Invalidated).zipWithIndex.map {
-          case (status, i) =>
-            status -> i.U(procNumBits.W)
-        })
-      val pivot_data = Mux(pivot < procNum.U, l1Data(pivot), 0.U)
-
-      // all the other caches of addr must have the same data
-      val match_tag_data = match_tag_status.zip(l1Data).zipWithIndex.map {
-        case ((status, data), i) =>
-          Mux(status =/= Invalidated && pivot =/= i.U(procNumBits.W),
-            Mux(data === pivot_data, true.B, false.B),
-            true.B
-          )
+      // the Owned cache line
+      val ownedData = l1Data.zipWithIndex.map {
+        case (data, i) =>
+          Mux(match_tag_status(i) === Owned, data, 0.U)
+      }.reduce(_ + _)
+      // all the Shared cache line must equal the Owned cache line
+      l1Data.zipWithIndex.foreach {
+        case (data, i) =>
+          when(match_tag_status(i) === Shared) {
+            assert(data === ownedData || replacing)
+          }
       }
-      assert(pivot === procNum.U || match_tag_data.reduce(_ && _) || replacing)
     }
 
     (0 until 1 << ep.addrBits).foreach { addr =>
@@ -109,8 +106,8 @@ class MOESITop(implicit p: Parameters) extends LazyModule with HasMOESIParameter
   }
 }
 
-object MOESITop extends App {
-  val lazyModule = LazyModule(new MOESITop()(Parameters.empty))
+object MOESIDiplomacyTop extends App {
+  val lazyModule = LazyModule(new MOESIDiplomacyTop()(Parameters.empty))
   (new ChiselStage).emitVerilog(lazyModule.module, Array("--target-dir", "generated/MOESI_Diplomacy"))
   File.writeOutputFile("generated/MOESI_Diplomacy", "MOESI_Diplomacy.graphml", lazyModule.graphML)
 //  Check.bmc(() => LazyModule(new MOESITop()(Parameters.empty)).module, 30)

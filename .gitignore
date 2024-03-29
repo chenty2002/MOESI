@@ -11,3 +11,6 @@ generated
 test_run_dir
 /pic/tilelink.vsdx
 *_bmc
+.vscode
+.metals
+.bloop
