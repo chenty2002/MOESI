@@ -58,38 +58,42 @@ class Bus extends Module with HasMOESIParameters {
     printf("bus: Stage 2\n")
     // waiting for the response from the memory
     when(memHold && memData.valid && busData.valid && memData.addr === busData.addr) {
-      printf("bus: Stage 4\n")
+      printf("bus: Stage 3\n")
       when(memData.busTransaction === BusUpgrade || memData.busTransaction === Repl) {
-        printf("bus: Stage 5\n")
+        printf("bus: Stage 4\n")
         memHold := false.B
         memWen := false.B
         when(memData.busTransaction === Repl) {
+          printf("bus: Stage 5\n")
           io.replFlag.foreach(_ := true.B)
         }
         when(!flushHold) {
+          printf("bus: Stage 6\n")
           enableIO()
         }
       }.otherwise {
         // Fill transaction needs to wait one more beat for the cache to process
         when(memHoldFlag) {
-          printf("bus: Stage 6\n")
+          printf("bus: Stage 7\n")
           memHold := false.B
           memHoldFlag := false.B
           when(!flushHold) {
             enableIO()
           }
         }.otherwise {
-          printf("bus: Stage 7\n")
-          // copy the info of the memory (ignores pid because the response needs to correspond to the request)
-          busData.busTransaction := memData.busTransaction
-          busData.cacheBlock := memData.cacheBlock
-          memHoldFlag := true.B
+          when(busData.valid && busData.busTransaction =/= Repl) {
+            printf("bus: Stage 8\n")
+            // copy the info of the memory (ignores pid because the response needs to correspond to the request)
+            busData.busTransaction := memData.busTransaction
+            busData.cacheBlock := memData.cacheBlock
+            memHoldFlag := true.B
+          }
         }
       }
     }
     // waiting for the response from other caches
     when(flushHold) {
-      printf("bus: Stage 8\n")
+      printf("bus: Stage 9\n")
       flushHold := false.B
       val flushFlag = io.l1CachesIn.map { l1 =>
         l1.valid &&
@@ -100,7 +104,7 @@ class Bus extends Module with HasMOESIParameters {
         flushFlag(0), flushFlag(1), flushFlag(2), flushFlag(3))
       when(!flushFlag.reduce(_ || _)) {
         when(busData.busTransaction =/= Repl) {
-          printf("bus: Stage 9\n")
+          printf("bus: Stage 10\n")
           memHold := true.B
         }
       }.otherwise {
@@ -126,18 +130,22 @@ class Bus extends Module with HasMOESIParameters {
               // when there is only one Shared cache, it needs to become Exclusive
               // otherwise, it only needs to become Owned
               when(countShared === 1.U) {
+                printf("bus: Stage 13\n")
                 busData.state := Invalidated
               }
               flushCleanFlag := true.B
             }.elsewhen(countShared === 0.U) {
+              printf("bus: Stage 14\n")
               // bus replace request, inform the Owned cache to become Modified
               // special usage
               busData.state := Invalidated
               flushCleanFlag := true.B
             }
           }.otherwise {
-            printf("bus: Stage 13\n")
-            busData := io.l1CachesIn(tarPid)
+            printf("bus: Stage 15\n")
+            busData.busTransaction := Flush
+            busData.cacheBlock := io.l1CachesIn(tarPid).cacheBlock
+//            busData := io.l1CachesIn(tarPid)
           }
         }
         // the flush data on the bus needs to be cleared, but it needs to last one more beat
@@ -147,10 +155,11 @@ class Bus extends Module with HasMOESIParameters {
       }
     }
   }.otherwise {
-    printf("bus: Stage 14\n")
+    printf("bus: Stage 16\n")
     memWen := false.B
     when(flushCleanFlag) {
       when(busData.busTransaction === Repl) {
+        printf("bus: Stage 17\n")
         io.replFlag.foreach(_ := true.B)
       }
       enableIO()
@@ -160,6 +169,7 @@ class Bus extends Module with HasMOESIParameters {
         l1.valid && l1.busTransaction === Repl
       }
       when(busDataBuffer.busTransaction =/= Repl && hasRepl.reduce(_ || _)) {
+        printf("bus: Stage 18\n")
         val replPid = MuxCase(procNum.U(procNumBits.W),
           hasRepl.zipWithIndex.map {
             case (replacing, i) =>
@@ -167,39 +177,44 @@ class Bus extends Module with HasMOESIParameters {
           })
         busDataBuffer := io.l1CachesIn(replPid)
       }.elsewhen(busDataBuffer.valid) {
+        printf("bus: Stage 19\n")
         processing := true.B
         busDataBuffer := busDataBuffer
       }.otherwise {
+        printf("bus: Stage 20\n")
         busDataBuffer := io.l1CachesIn(OHToUInt(arbiter.io.grant))
       }
     }
     when(busData.valid) {
-      printf("bus: Stage 15\n")
+      printf("bus: Stage 21\n")
       when(busData.busTransaction === BusRd) {
-        printf("bus: Stage 16\n")
+        printf("bus: Stage 22\n")
         flushHold := true.B
       }.elsewhen(busData.busTransaction === BusUpgrade) {
-        printf("bus: Stage 17\n")
+        printf("bus: Stage 23\n")
         memHold := true.B
         memWen := true.B
       }.elsewhen(busData.busTransaction === BusRdX) {
-        printf("bus: Stage 18\n")
+        printf("bus: Stage 24\n")
         enableIO()
       }.elsewhen(busData.busTransaction === Repl) {
-        printf("bus: Stage 19\n")
+        printf("bus: Stage 25\n")
         switch(busData.state) {
           is(Modified) {
+            printf("bus: Stage 26\n")
             // replacing Modified cache, only needs to write the data to memory
             memHold := true.B
             memWen := true.B
           }
           is(Owned) {
+            printf("bus: Stage 27\n")
             // replacing Owned cache, there is at least one Shared cache,
             // choose one Shared cache to become Owned if there is at least two Shared cache,
             // choose the Shared cache to become Exclusive if there is only one Shared cache
             flushHold := true.B
           }
           is(Shared) {
+            printf("bus: Stage 28\n")
             // replacing Shared cache, there must be one Owned cache,
             // if there are no other Shared caches, the Owned cache needs to become Modified
             // if there exists another Shared cache, do nothing

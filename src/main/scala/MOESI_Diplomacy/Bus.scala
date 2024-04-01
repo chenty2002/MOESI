@@ -61,14 +61,10 @@ class Bus(implicit p: Parameters) extends LazyModule with HasMOESIParameters {
     memW.foreach(_ := memWen)
     memData := memIn.head
 
-    printf("bus: Stage 1\n")
     when(memHold || flushHold) {
-      printf("bus: Stage 2\n")
       // waiting for the response from the memory
       when(memHold && memData.valid && busData.valid && memData.addrBundle.addr === busData.addrBundle.addr) {
-        printf("bus: Stage 4\n")
         when(memData.busTransaction === BusUpgrade || memData.busTransaction === Repl) {
-          printf("bus: Stage 5\n")
           memHold := false.B
           memWen := false.B
           when(memData.busTransaction === Repl) {
@@ -80,39 +76,34 @@ class Bus(implicit p: Parameters) extends LazyModule with HasMOESIParameters {
         }.otherwise {
           // Fill transaction needs to wait one more beat for the cache to process
           when(memHoldFlag) {
-            printf("bus: Stage 6\n")
             memHold := false.B
             memHoldFlag := false.B
             when(!flushHold) {
               enableIO()
             }
           }.otherwise {
-            printf("bus: Stage 7\n")
-            // copy the info of the memory (ignores pid because the response needs to correspond to the request)
-            busData.busTransaction := memData.busTransaction
-            busData.addrBundle.cacheBlock := memData.addrBundle.cacheBlock
-            memHoldFlag := true.B
+            when(busData.valid && busData.busTransaction =/= Repl) {
+              // copy the info of the memory (ignores pid because the response needs to correspond to the request)
+              busData.busTransaction := memData.busTransaction
+              busData.addrBundle.cacheBlock := memData.addrBundle.cacheBlock
+              memHoldFlag := true.B
+            }
           }
         }
       }
       // waiting for the response from other caches
       when(flushHold) {
-        printf("bus: Stage 8\n")
         flushHold := false.B
         val flushFlag = l1CachesIn.map { l1 =>
           l1.valid &&
             l1.addrBundle.addr === busData.addrBundle.addr &&
             l1.busTransaction === Flush
         }
-        printf("bus: flushFlag (%d, %d, %d, %d)\n",
-          flushFlag(0), flushFlag(1), flushFlag(2), flushFlag(3))
         when(!flushFlag.reduce(_ || _)) {
           when(busData.busTransaction =/= Repl) {
-            printf("bus: Stage 9\n")
             memHold := true.B
           }
         }.otherwise {
-          printf("bus: Stage 11\n")
           val countShared = PopCount(l1CachesIn.zip(flushFlag).map {
             case (l1In, flush) =>
               l1In.state === Shared && flush
@@ -123,12 +114,10 @@ class Bus(implicit p: Parameters) extends LazyModule with HasMOESIParameters {
               case (flushAndShared, i) =>
                 flushAndShared -> i.U(procNumBits.W)
             })
-          printf("bus: TarPid: %d\n", tarPid)
           when(tarPid =/= procNum.U(procNumBits.W)) {
             when(busData.busTransaction === Repl) {
               // replacing Owned cache, choose a Shared cache to upgrade
               when(busData.state === Owned && l1CachesIn(tarPid).state === Shared) {
-                printf("bus: Stage 12\n")
                 busData.pid := tarPid
                 // SPECIAL USE
                 // when there is only one Shared cache, it needs to become Exclusive
@@ -144,8 +133,9 @@ class Bus(implicit p: Parameters) extends LazyModule with HasMOESIParameters {
                 flushCleanFlag := true.B
               }
             }.otherwise {
-              printf("bus: Stage 13\n")
-              busData := l1CachesIn(tarPid)
+              busData.busTransaction := Flush
+              busData.addrBundle.cacheBlock := l1CachesIn(tarPid).addrBundle.cacheBlock
+//              busData := l1CachesIn(tarPid)
             }
           }
           // the flush data on the bus needs to be cleared, but it needs to last one more beat
@@ -155,7 +145,6 @@ class Bus(implicit p: Parameters) extends LazyModule with HasMOESIParameters {
         }
       }
     }.otherwise {
-      printf("bus: Stage 14\n")
       memWen := false.B
       when(flushCleanFlag) {
         when(busData.busTransaction === Repl) {
@@ -182,19 +171,14 @@ class Bus(implicit p: Parameters) extends LazyModule with HasMOESIParameters {
         }
       }
       when(busData.valid) {
-        printf("bus: Stage 15\n")
         when(busData.busTransaction === BusRd) {
-          printf("bus: Stage 16\n")
           flushHold := true.B
         }.elsewhen(busData.busTransaction === BusUpgrade) {
-          printf("bus: Stage 17\n")
           memHold := true.B
           memWen := true.B
         }.elsewhen(busData.busTransaction === BusRdX) {
-          printf("bus: Stage 18\n")
           enableIO()
         }.elsewhen(busData.busTransaction === Repl) {
-          printf("bus: Stage 19\n")
           switch(busData.state) {
             is(Modified) {
               // replacing Modified cache, only needs to write the data to memory
@@ -219,6 +203,5 @@ class Bus(implicit p: Parameters) extends LazyModule with HasMOESIParameters {
     }
     memOut.foreach(_ := busData)
     l1CachesOut.foreach(_ := busData)
-    printf("bus: Hold: %d\n", memHold || flushHold)
   }
 }

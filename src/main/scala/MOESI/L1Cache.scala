@@ -47,7 +47,7 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
   val replTag = RegInit(0.U(tagBits.W))
   val replIndex = RegInit(0.U(indexBits.W))
   val replData = RegInit(0.U(cacheBlockBits.W))
-  val replacingState = RegInit(0.U(stateBits.W))
+  val replState = RegInit(0.U(stateBits.W))
 
   // when the cache finishes the last request and the next request is valid, it confirms to process
   when(ioPrOp === PrWr || ioPrOp === PrRd) {
@@ -90,14 +90,14 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
     }
   }
 
-  val L1Cache = RegInit(VecInit.fill(cacheBlockNum)(0.U(cacheBlockBits.W)))
+  val cacheData = RegInit(VecInit.fill(cacheBlockNum)(0.U(cacheBlockBits.W)))
   val tagDirectory = RegInit(VecInit.fill(cacheBlockNum)(0.U(tagBits.W)))
   val cacheStatus = RegInit(VecInit.fill(cacheBlockNum)(Invalidated))
 
   val (tag, index) = parseAddr(prAddr)
 
   // bus requests
-  val guestId = io.busIn.pid
+  val busId = io.busIn.pid
   val busTag = io.busIn.tag
   val busTrans = io.busIn.busTransaction
   val busIndex = io.busIn.index
@@ -117,7 +117,7 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
     "\t\tvalid: %d\n" +
     "\t\taddr: %d\n",
     hostPid,
-    guestId,
+    busId,
     busTag,
     busTrans,
     busIndex,
@@ -126,7 +126,7 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
     busValid,
     busAddr)
 
-  io.cacheData := L1Cache
+  io.cacheData := cacheData
   io.cacheStatus := cacheStatus
   io.tagDirectory := tagDirectory
 
@@ -145,7 +145,7 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
     replTag := new_t
     replIndex := ix
     replData := new_data
-    replacingState := ste
+    replState := ste
     fillBus(Repl, old_t, ix, old_data, cacheStatus(ix))
     validateBus := true.B
   }
@@ -157,7 +157,7 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
   }
 
   def fillBus(trans: UInt, t: UInt, ix: UInt, ste: UInt): Unit = {
-    fillBus(trans, t, ix, L1Cache(ix), ste)
+    fillBus(trans, t, ix, cacheData(ix), ste)
   }
 
   def fillBus(trans: UInt, t: UInt, ix: UInt, block: UInt, ste: UInt): Unit = {
@@ -186,7 +186,7 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
       trans,
       oBundle.tag,
       oBundle.index,
-      L1Cache(oBundle.index),
+      cacheData(oBundle.index),
       ste
     )
   }
@@ -215,7 +215,7 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
   printf("pid %d: Stage 1\n", hostPid)
 
   // the request from the bus is from another processor and it hits a block
-  when(guestId =/= hostPid && busValid) {
+  when(busId =/= hostPid && busValid) {
     printf("pid %d: Stage 2\n", hostPid)
     when(isHit(busAddr)) {
       switch(cacheStatus(busIndex)) {
@@ -246,7 +246,7 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
             // so this cache needs to become Modified
           }.elsewhen(busTrans === Repl) {
             when(busState === Invalidated) {
-              printf("pid %d: Stage 9\n", hostPid)
+              printf("pid %d: Stage 8\n", hostPid)
               cacheStatus(busIndex) := Modified
               printStatus(busIndex, Modified)
             }.elsewhen(busState === Shared) {
@@ -255,41 +255,41 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
           }
         }
         is(Exclusive) { // clean
-          printf("pid %d: Stage 10\n", hostPid)
+          printf("pid %d: Stage 9\n", hostPid)
           when(busTrans === BusRd) {
-            printf("pid %d: Stage 11\n", hostPid)
+            printf("pid %d: Stage 10\n", hostPid)
             cacheStatus(busIndex) := Owned
             printStatus(busIndex, Owned)
             fillBus(Flush, io.busIn, Exclusive)
           }.elsewhen(busTrans === BusRdX || busTrans === BusUpgrade) {
-            printf("pid %d: Stage 12\n", hostPid)
+            printf("pid %d: Stage 11\n", hostPid)
             cacheStatus(busIndex) := Invalidated
             printStatus(busIndex, Invalidated)
           }
         }
         is(Shared) { // clean
-          printf("pid %d: Stage 13\n", hostPid)
+          printf("pid %d: Stage 12\n", hostPid)
           when(busTrans === BusRd) {
-            printf("pid %d: Stage 14\n", hostPid)
+            printf("pid %d: Stage 13\n", hostPid)
             // response for a read request
             fillBus(Flush, io.busIn, Shared)
           }.elsewhen(busTrans === BusRdX || busTrans === BusUpgrade) {
-            printf("pid %d: Stage 15\n", hostPid)
+            printf("pid %d: Stage 14\n", hostPid)
             // invalidated cache reading shared cache
             cacheStatus(busIndex) := Invalidated
             printStatus(busIndex, Invalidated)
           }.elsewhen(busTrans === Repl) {
-            printf("pid %d: Stage 18\n", hostPid)
+            printf("pid %d: Stage 15\n", hostPid)
             fillBus(Flush, io.busIn, Shared)
           }
         }
       }
       // the request from the bus is from another processor but it does not hit a block
     }.elsewhen(prHlt && busAddr === prAddr) {
-      printf("pid %d: Stage 18\n", hostPid)
+      printf("pid %d: Stage 16\n", hostPid)
       // the response is from another cache
-      when(busTrans === Flush) {
-        printf("pid %d: Stage 19\n", hostPid)
+      when(busTrans === Flush && busId === hostPid) {
+        printf("pid %d: Stage 17\n", hostPid)
         when(prOp === PrRd) {
           // when this position has Exclusive data or Invalidated data, it can be replaced at once
           when(cacheStatus(busIndex) === Exclusive || cacheStatus(busIndex) === Invalidated || busTag === tagDirectory(index)) {
@@ -301,8 +301,8 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
             prHlt := false.B
             io.response := true.B
             enableIO()
-            printf("pid %d: Stage 20\n", hostPid)
-            L1Cache(busIndex) := busData
+            printf("pid %d: Stage 18\n", hostPid)
+            cacheData(busIndex) := busData
             printf("pid %d: L1Cache(%d) -> %d\n", hostPid, busIndex, busData)
             tagDirectory(index) := busTag
             cacheOutput := busData
@@ -310,8 +310,8 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
             printStatus(index, Shared)
             // otherwise it needs to inform other caches first
           }.otherwise {
-            printf("pid %d: Stage 21\n", hostPid)
-            enableRepl(tagDirectory(busIndex), busTag, busIndex, L1Cache(busIndex), busData, Shared)
+            printf("pid %d: Stage 19\n", hostPid)
+            enableRepl(tagDirectory(busIndex), busTag, busIndex, cacheData(busIndex), busData, Shared)
           }
         }
       }
@@ -319,34 +319,34 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
   }
 
   // when this is true, the status of the addr corresponding to the bus will be invalidated the next beat
-  val invalidateNext = guestId =/= hostPid && busValid && isHit(busAddr) &&
+  val invalidateNext = busId =/= hostPid && busValid && isHit(busAddr) &&
     (cacheStatus(busIndex) =/= Invalidated && (busTrans === BusRdX || busTrans === BusUpgrade))
 
   // when this is true, the cache will be answering the bus the next beat
-  val answeringNext = guestId =/= hostPid && busValid && isHit(busAddr) &&
+  val answeringNext = busId =/= hostPid && busValid && isHit(busAddr) &&
     ((cacheStatus(busIndex) =/= Invalidated && busTrans === BusRd) ||
       (cacheStatus(busIndex) === Owned && busTrans === Repl && busState === Shared) ||
       (cacheStatus(busIndex) === Shared && busTrans === Repl))
 
   // the replacing transaction has been informed to other caches, this cache can be replaced
   when(replacing && io.busReplFlag) {
-    printf("pid %d: Stage 22\n", hostPid)
+    printf("pid %d: Stage 20\n", hostPid)
     replacing := false.B
-    L1Cache(replIndex) := replData
+    cacheData(replIndex) := replData
     printf("pid %d: L1Cache(%d) -> %d\n", hostPid, replIndex, replData)
     tagDirectory(replIndex) := replTag
     prHlt := false.B
     io.response := true.B
     enableIO()
     cacheOutput := replData
-    cacheStatus(replIndex) := replacingState
-    printStatus(replIndex, replacingState)
+    cacheStatus(replIndex) := replState
+    printStatus(replIndex, replState)
   }
 
   // the Repl trans from the bus appears when another Owned cache will be replaced and this cache is Shared
   // and this cache has been chosen to upgrade
-  when(guestId === hostPid && busValid && busTrans === Repl) {
-    printf("pid %d: Stage 28\n", hostPid)
+  when(busId === hostPid && busValid && busTrans === Repl) {
+    printf("pid %d: Stage 21\n", hostPid)
     when(cacheStatus(busIndex) === Shared) {
       // when there are at least two Shared cache, this chosen cache becomes Owned
       when(busState === Owned) {
@@ -363,8 +363,8 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
 
   // processor requests
   printf("pid %d: prHlt: %d\n", hostPid, prHlt)
-  when(guestId === hostPid && busValid && prHlt) {
-    printf("pid %d: Stage 23\n", hostPid)
+  when(busId === hostPid && busValid && prHlt) {
+    printf("pid %d: Stage 22\n", hostPid)
     validateBus := false.B
     busOut := 0.U.asTypeOf(new BusData)
     // the response is from the memory (one response can only respond to the origin of the request)
@@ -375,8 +375,8 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
           prHlt := false.B
           io.response := true.B
           enableIO()
-          printf("pid %d: Stage 25\n", hostPid)
-          L1Cache(busIndex) := busData
+          printf("pid %d: Stage 23\n", hostPid)
+          cacheData(busIndex) := busData
           printf("pid %d: L1Cache(%d) -> %d\n", hostPid, busIndex, busData)
           tagDirectory(index) := busTag
           cacheOutput := busData
@@ -384,14 +384,14 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
           printStatus(index, Exclusive)
           // otherwise it needs to inform other caches first
         }.otherwise {
-          printf("pid %d: Stage 26\n", hostPid)
-          enableRepl(tagDirectory(busIndex), busTag, busIndex, L1Cache(busIndex), busData, Exclusive)
+          printf("pid %d: Stage 24\n", hostPid)
+          enableRepl(tagDirectory(busIndex), busTag, busIndex, cacheData(busIndex), busData, Exclusive)
         }
       }
       // these transactions must wait until the bus receives ack to update this cache
     }.elsewhen(busTrans === BusUpgrade || busTrans === BusRdX) {
       when(cacheStatus(busIndex) === Exclusive || cacheStatus(busIndex) === Invalidated || busTag === tagDirectory(index)) {
-        printf("pid %d: Stage 27\n", hostPid)
+        printf("pid %d: Stage 25\n", hostPid)
         when(busTrans === BusUpgrade) {
           cacheStatus(index) := Exclusive
           printStatus(index, Exclusive)
@@ -400,7 +400,7 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
           printStatus(index, Modified)
         }
         tagDirectory(index) := tag
-        L1Cache(index) := busData
+        cacheData(index) := busData
         printf("pid %d: L1Cache(%d) -> %d\n", hostPid, index, busData)
         prHlt := false.B
         respNext := true.B
@@ -408,14 +408,14 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
       }.otherwise {
         printf("pid %d: Stage 26\n", hostPid)
         when(busTrans === BusUpgrade) {
-          enableRepl(tagDirectory(busIndex), busTag, busIndex, L1Cache(busIndex), busData, Exclusive)
+          enableRepl(tagDirectory(busIndex), busTag, busIndex, cacheData(busIndex), busData, Exclusive)
         }.otherwise {
-          enableRepl(tagDirectory(busIndex), busTag, busIndex, L1Cache(busIndex), busData, Modified)
+          enableRepl(tagDirectory(busIndex), busTag, busIndex, cacheData(busIndex), busData, Modified)
         }
       }
     }
   }.elsewhen(!prHlt) {
-    printf("pid %d: Stage 29\n", hostPid)
+    printf("pid %d: Stage 27\n", hostPid)
     // the request from the processor hits
     when(isHit(prAddr)) {
       // when the request on the bus invalidates the same address as the processor's,
@@ -430,15 +430,15 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
           is(Modified) {
             switch(prOp) {
               is(PrRd) {
-                printf("pid %d: Stage 30\n", hostPid)
-                cacheOutput := L1Cache(index)
+                printf("pid %d: Stage 28\n", hostPid)
+                cacheOutput := cacheData(index)
                 io.response := true.B
                 enableIO()
               }
               is(PrWr) {
                 when(!answeringNext) {
-                  printf("pid %d: Stage 31\n", hostPid)
-                  L1Cache(index) := prData
+                  printf("pid %d: Stage 29\n", hostPid)
+                  cacheData(index) := prData
                   printf("pid %d: L1Cache(%d) -> %d\n", hostPid, index, prData)
                   tagDirectory(index) := tag
                   io.response := true.B
@@ -450,13 +450,13 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
           is(Owned) {
             switch(prOp) {
               is(PrRd) {
-                printf("pid %d: Stage 32\n", hostPid)
-                cacheOutput := L1Cache(index)
+                printf("pid %d: Stage 30\n", hostPid)
+                cacheOutput := cacheData(index)
                 io.response := true.B
                 enableIO()
               }
               is(PrWr) {
-                printf("pid %d: Stage 33\n", hostPid)
+                printf("pid %d: Stage 31\n", hostPid)
                 fillBus(BusUpgrade, tag, index, prData, Owned)
                 validateBus := true.B
 
@@ -467,15 +467,15 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
           is(Exclusive) {
             switch(prOp) {
               is(PrRd) {
-                printf("pid %d: Stage 34\n", hostPid)
-                cacheOutput := L1Cache(index)
+                printf("pid %d: Stage 32\n", hostPid)
+                cacheOutput := cacheData(index)
                 io.response := true.B
                 enableIO()
               }
               is(PrWr) {
                 when(!answeringNext) {
-                  printf("pid %d: Stage 35\n", hostPid)
-                  L1Cache(index) := prData
+                  printf("pid %d: Stage 33\n", hostPid)
+                  cacheData(index) := prData
                   printf("pid %d: L1Cache(%d) -> %d\n", hostPid, index, prData)
                   tagDirectory(index) := tag
                   cacheStatus(index) := Modified
@@ -489,13 +489,13 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
           is(Shared) {
             switch(prOp) {
               is(PrRd) {
-                printf("pid %d: Stage 36\n", hostPid)
-                cacheOutput := L1Cache(index)
+                printf("pid %d: Stage 34\n", hostPid)
+                cacheOutput := cacheData(index)
                 io.response := true.B
                 enableIO()
               }
               is(PrWr) {
-                printf("pid %d: Stage 37\n", hostPid)
+                printf("pid %d: Stage 35\n", hostPid)
                 fillBus(BusUpgrade, tag, index, prData, Shared)
                 validateBus := true.B
 
@@ -509,14 +509,14 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
     }.otherwise {
       switch(prOp) {
         is(PrRd) {
-          printf("pid %d: Stage 38\n", hostPid)
+          printf("pid %d: Stage 36\n", hostPid)
           fillBus(BusRd, tag, index, 0.U, Invalidated)
           validateBus := true.B
 
           prHlt := true.B
         }
         is(PrWr) {
-          printf("pid %d: Stage 39\n", hostPid)
+          printf("pid %d: Stage 37\n", hostPid)
           fillBus(BusRdX, tag, index, prData, Invalidated)
           validateBus := true.B
 

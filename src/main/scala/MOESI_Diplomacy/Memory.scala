@@ -25,11 +25,11 @@ class Memory(val ps: MESIPS)(implicit p: Parameters) extends LazyModule with Has
       val addr = Cat(busIn.addrBundle.tag, busIn.addrBundle.index)
       val wr = busIn.addrBundle.cacheBlock
       busResp.foreach(_ := busIn)
-      //    io.busResp.pid := procNum.U(procNumBits.W)
 
-      when(wen) {
+      val transEn = busIn.busTransaction === BusUpgrade ||
+        (busIn.busTransaction === Repl && busIn.state === Modified)
+      when(wen && transEn) {
         mem.write(addr, wr)
-        printf("memory: writes %d into %d\n", wr, addr)
         busResp.foreach(_.addrBundle.cacheBlock := wr)
         when(busIn.busTransaction === BusUpgrade || busIn.busTransaction === Repl) {
           busResp.foreach(_.busTransaction := busIn.busTransaction)

@@ -89,44 +89,85 @@ class PeekTest extends AnyFlatSpec with ChiselScalatestTester with HasMOESIParam
 
   "Test" should "pass" in {
     test(new MOESITop()).withAnnotations(Seq(WriteVcdAnnotation)) { moesi =>
-      pokeProc(moesi, Seq(2, 0, 0, 0), Seq(1, 0, 0, 0), Seq(15, 0, 0, 0))
-      moesi.clock.step()
 //      pokeProc(moesi, Seq(2, 0, 0, 0), Seq(1, 0, 0, 0), Seq(15, 0, 0, 0))
 //      moesi.clock.step()
-//      pokeProc(moesi, Seq(0, 2, 0, 0), Seq(0, 1, 0, 0), Seq(0, 15, 0, 0))
-//      moesi.clock.step()
-
-      pokeProc(moesi, Seq(1, 0, 0, 0), Seq(2, 0, 0, 0))
-      moesi.clock.step()
+////      pokeProc(moesi, Seq(2, 0, 0, 0), Seq(1, 0, 0, 0), Seq(15, 0, 0, 0))
+////      moesi.clock.step()
+////      pokeProc(moesi, Seq(0, 2, 0, 0), Seq(0, 1, 0, 0), Seq(0, 15, 0, 0))
+////      moesi.clock.step()
+//
 //      pokeProc(moesi, Seq(1, 0, 0, 0), Seq(2, 0, 0, 0))
 //      moesi.clock.step()
-//      pokeProc(moesi, Seq(0, 1, 0, 0), Seq(0, 2, 0, 0))
-//      moesi.clock.step()
-
-      pokeProc(moesi, Seq(1, 0, 0, 0), Seq(3, 0, 0, 0))
-      moesi.clock.step()
+////      pokeProc(moesi, Seq(1, 0, 0, 0), Seq(2, 0, 0, 0))
+////      moesi.clock.step()
+////      pokeProc(moesi, Seq(0, 1, 0, 0), Seq(0, 2, 0, 0))
+////      moesi.clock.step()
+//
 //      pokeProc(moesi, Seq(1, 0, 0, 0), Seq(3, 0, 0, 0))
 //      moesi.clock.step()
-//      pokeProc(moesi, Seq(0, 1, 0, 0), Seq(3, 0, 0, 0))
-//      moesi.clock.step()
-
-      pokeProc(moesi, Seq(2, 0, 0, 0), Seq(2, 0, 0, 0))
-      moesi.clock.step()
+////      pokeProc(moesi, Seq(1, 0, 0, 0), Seq(3, 0, 0, 0))
+////      moesi.clock.step()
+////      pokeProc(moesi, Seq(0, 1, 0, 0), Seq(3, 0, 0, 0))
+////      moesi.clock.step()
+//
 //      pokeProc(moesi, Seq(2, 0, 0, 0), Seq(2, 0, 0, 0))
 //      moesi.clock.step()
-//      pokeProc(moesi, Seq(0, 2, 0, 0), Seq(0, 2, 0, 0))
+////      pokeProc(moesi, Seq(2, 0, 0, 0), Seq(2, 0, 0, 0))
+////      moesi.clock.step()
+////      pokeProc(moesi, Seq(0, 2, 0, 0), Seq(0, 2, 0, 0))
+////      moesi.clock.step()
+//
+//      pokeProc(moesi, Seq(0, 0, 0, 0), Seq(0, 0, 0, 0))
+//      moesi.clock.step()
+//      pokeProc(moesi, Seq(0, 0, 0, 0), Seq(0, 0, 0, 0))
+//      moesi.clock.step()
+//      pokeProc(moesi, Seq(0, 0, 0, 0), Seq(0, 0, 0, 0))
+//      moesi.clock.step()
+//      pokeProc(moesi, Seq(0, 0, 0, 0), Seq(0, 0, 0, 0))
+//      moesi.clock.step()
+//      pokeProc(moesi, Seq(0, 0, 0, 0), Seq(0, 0, 0, 0))
 //      moesi.clock.step()
 
-      pokeProc(moesi, Seq(0, 0, 0, 0), Seq(0, 0, 0, 0))
-      moesi.clock.step()
-      pokeProc(moesi, Seq(0, 0, 0, 0), Seq(0, 0, 0, 0))
-      moesi.clock.step()
-      pokeProc(moesi, Seq(0, 0, 0, 0), Seq(0, 0, 0, 0))
-      moesi.clock.step()
-      pokeProc(moesi, Seq(0, 0, 0, 0), Seq(0, 0, 0, 0))
-      moesi.clock.step()
-      pokeProc(moesi, Seq(0, 0, 0, 0), Seq(0, 0, 0, 0))
-      moesi.clock.step()
+      var step = 0
+      do {
+        println(s"${step}----------------------------------")
+        pokeProc(moesi, Seq(0, 2, 0, 0), Seq(0, 0, 0, 0), Seq(0, 3, 0, 0))
+        moesi.clock.step()
+        step += 1
+      } while (step < 20 && !moesi.io.procResp(1).peekBoolean())
+
+      step = 0
+      do {
+        println(s"${step}----------------------------------")
+        pokeProc(moesi, Seq(0, 2, 0, 0), Seq(0, 4, 0, 0), Seq(0, 4, 0, 0))
+        moesi.clock.step()
+        step += 1
+      } while (step < 20 && !moesi.io.procResp(1).peekBoolean())
+
+      step = 0
+      do {
+        println(s"${step}----------------------------------")
+        pokeProc(moesi, Seq(0, 2, 0, 0), Seq(0, 8, 0, 0), Seq(0, 5, 0, 0))
+        moesi.clock.step()
+        step += 1
+      } while (step < 20 && !moesi.io.procResp(1).peekBoolean())
+
+      step = 0
+      do {
+        println(s"${step}----------------------------------")
+        pokeProc(moesi, Seq(0, 2, 0, 0), Seq(0, 4, 0, 0), Seq(0, 6, 0, 0))
+        moesi.clock.step()
+        step += 1
+      } while (step < 20 && !moesi.io.procResp(1).peekBoolean())
+
+      step = 0
+      do {
+        println(s"${step}----------------------------------")
+        pokeProc(moesi, Seq(0, 2, 0, 0), Seq(0, 8, 0, 0), Seq(0, 7, 0, 0))
+        moesi.clock.step()
+        step += 1
+      } while (step < 20 && !moesi.io.procResp(1).peekBoolean())
+      endSign(moesi)
     }
   }
 
