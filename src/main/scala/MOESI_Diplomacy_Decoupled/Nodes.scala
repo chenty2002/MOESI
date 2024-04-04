@@ -23,6 +23,12 @@ class MESIPS(val tagB: Int, val indexB: Int, val blockB: Int) {
     val tag = addr(tagEnd, tagStart)
     (tag, index)
   }
+
+  override def equals(obj: Any): Boolean = obj match {
+    case ps: MESIPS =>
+      ps.tagB == this.tagB && ps.blockB == this.blockB && ps.indexB == this.indexB
+    case _ => false
+  }
 }
 
 object MESINodeImp extends SimpleNodeImp[MESIPS, MESIPS, MESIPS, BusBundle] {

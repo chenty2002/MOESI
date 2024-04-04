@@ -26,12 +26,8 @@ class MOESIDiplomacyDecoupledTop(implicit p: Parameters) extends LazyModule with
   val mem = LazyModule(new Memory(new MESIPS(2, 2, 8)))
   val bus = LazyModule(new Bus)
 
-  bus.busNode.zip(l1s.map(_.l1Node)).foreach { nodes =>
-    nodes._1 := nodes._2
-  }
-  bus.busNode.zip(mem.memNode).foreach { nodes =>
-    nodes._2 := nodes._1
-  }
+  l1s.foreach(bus.busNode := _.l1Node)
+  mem.memNode := bus.busNode
 
   lazy val module = new MESITopModule(this)
 
