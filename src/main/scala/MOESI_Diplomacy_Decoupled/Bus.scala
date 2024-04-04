@@ -1,4 +1,4 @@
-package MOESI_Diplomacy
+package MOESI_Diplomacy_Decoupled
 
 import Util.RoundRobinArbiter
 import chisel3._
@@ -8,26 +8,25 @@ import org.chipsalliance.cde.config.Parameters
 
 class Bus(implicit p: Parameters) extends LazyModule with HasMOESIParameters {
   lazy val module = new BusModuleImp(this)
-  val busDNode = Seq.fill(procNum)(new BusDNode(_.head, _.head))
-  val busUNode = Seq.fill(procNum)(new BusUNode(_.head, _.head))
+  val busNode = Seq.fill(procNum)(new BusNode(_.head, _.head))
 
   class BusModuleImp(wrapper: LazyModule) extends LazyModuleImp(wrapper) {
-    val ep = busUNode.head.edges.out.head
+    val ep = busNode.head.edges.out.head
 
     val verify_io = IO(new Bundle() {
       val replacing = Output(new Bool)
     })
 
-    val l1CachesIn = VecInit(busDNode.map(_.in.head._1.busData))
-    val validateBus = VecInit(busDNode.map(_.in.head._1.flag))
+    val l1CachesIn = VecInit(busNode.map(_.in.head._1.masterOut.bits.busData))
+    val validateBus = VecInit(busNode.map(_.in.head._1.masterOut.bits.flag))
 
-    val memOut = busDNode.map(_.out.head._1.busData)
-    val memW = busDNode.map(_.out.head._1.flag)
+    val memOut = busNode.map(_.out.head._1.masterOut.bits.busData)
+    val memW = busNode.map(_.out.head._1.masterOut.bits.flag)
 
-    val l1CachesOut = busUNode.map(_.out.head._1.busData)
-    val replFlag = busUNode.map(_.out.head._1.flag)
+    val l1CachesOut = busNode.map(_.in.head._1.masterIn.bits.busData)
+    val replFlag = busNode.map(_.in.head._1.masterIn.bits.flag)
 
-    val memIn = busUNode.map(_.in.head._1.busData)
+    val memIn = busNode.map(_.out.head._1.masterIn.bits.busData)
 
     val arbiter = Module(new RoundRobinArbiter(procNum))
     arbiter.io.requests := validateBus

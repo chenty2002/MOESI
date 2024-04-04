@@ -1,4 +1,4 @@
-package MOESI_Diplomacy
+package MOESI_Diplomacy_Decoupled
 
 import chisel3._
 import chisel3.util._
@@ -7,17 +7,16 @@ import org.chipsalliance.cde.config.Parameters
 
 class L1Cache(val hostPid: UInt, val ps: MESIPS)(implicit p: Parameters) extends LazyModule with HasMOESIParameters {
   lazy val module = new L1ModuleImp(this)
-  val l1DNode = new L1SourceNode(Seq(ps))
-  val l1UNode = new L1SinkNode(Seq(ps))
+  val l1Node = new L1Node(Seq(ps))
 
   class L1ModuleImp(wrapper: LazyModule) extends LazyModuleImp(wrapper) {
-    val ep = l1DNode.edges.out.head
+    val ep = l1Node.edges.out.head
 
-    val busO = l1DNode.out.map(_._1.busData)
-    val vBus = l1DNode.out.map(_._1.flag)
+    val busO = l1Node.out.map(_._1.masterOut.bits.busData)
+    val vBus = l1Node.out.map(_._1.masterOut.bits.flag)
 
-    val busI = l1UNode.in.map(_._1.busData).head
-    val replFlag = l1UNode.in.map(_._1.flag).head
+    val busI = l1Node.out.map(_._1.masterIn.bits.busData).head
+    val replFlag = l1Node.out.map(_._1.masterIn.bits.flag).head
     val io = IO(new Bundle() {
       // processor operations
       val procOp = Input(UInt(procOpBits.W))

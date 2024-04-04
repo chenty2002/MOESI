@@ -143,6 +143,7 @@ class Bus extends Module with HasMOESIParameters {
             }
           }.otherwise {
             printf("bus: Stage 15\n")
+            busData.pid := tarPid
             busData.busTransaction := Flush
             busData.cacheBlock := io.l1CachesIn(tarPid).cacheBlock
 //            busData := io.l1CachesIn(tarPid)

@@ -338,6 +338,7 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
     prHlt := false.B
     io.response := true.B
     enableIO()
+    ansBus := 0.U.asTypeOf(new BusData)
     cacheOutput := replData
     cacheStatus(replIndex) := replState
     printStatus(replIndex, replState)
