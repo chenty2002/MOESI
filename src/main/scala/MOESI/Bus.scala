@@ -127,7 +127,7 @@ class Bus extends Module with HasMOESIParameters {
               printf("bus: Stage 12\n")
               busData.pid := tarPid
               // SPECIAL USE
-              // when there is only one Shared cache, it needs to become Exclusive
+              // when there is only one Shared cache, it needs to become Modified
               // otherwise, it only needs to become Owned
               when(countShared === 1.U) {
                 printf("bus: Stage 13\n")
@@ -143,7 +143,7 @@ class Bus extends Module with HasMOESIParameters {
             }
           }.otherwise {
             printf("bus: Stage 15\n")
-            busData.pid := tarPid
+//            busData.pid := tarPid
             busData.busTransaction := Flush
             busData.cacheBlock := io.l1CachesIn(tarPid).cacheBlock
 //            busData := io.l1CachesIn(tarPid)
@@ -211,7 +211,7 @@ class Bus extends Module with HasMOESIParameters {
             printf("bus: Stage 27\n")
             // replacing Owned cache, there is at least one Shared cache,
             // choose one Shared cache to become Owned if there is at least two Shared cache,
-            // choose the Shared cache to become Exclusive if there is only one Shared cache
+            // choose the Shared cache to become Modified if there is only one Shared cache
             flushHold := true.B
           }
           is(Shared) {

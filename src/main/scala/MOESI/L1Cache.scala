@@ -267,7 +267,7 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
             printStatus(busIndex, Invalidated)
           }
         }
-        is(Shared) { // clean
+        is(Shared) {
           printf("pid %d: Stage 12\n", hostPid)
           when(busTrans === BusRd) {
             printf("pid %d: Stage 13\n", hostPid)
@@ -281,37 +281,6 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
           }.elsewhen(busTrans === Repl) {
             printf("pid %d: Stage 15\n", hostPid)
             fillBus(Flush, io.busIn, Shared)
-          }
-        }
-      }
-      // the request from the bus is from another processor but it does not hit a block
-    }.elsewhen(prHlt && busAddr === prAddr) {
-      printf("pid %d: Stage 16\n", hostPid)
-      // the response is from another cache
-      when(busTrans === Flush && busId === hostPid) {
-        printf("pid %d: Stage 17\n", hostPid)
-        when(prOp === PrRd) {
-          // when this position has Exclusive data or Invalidated data, it can be replaced at once
-          when(cacheStatus(busIndex) === Exclusive || cacheStatus(busIndex) === Invalidated || busTag === tagDirectory(index)) {
-            // if this cache is not the origin of the flush transaction
-            // but it coincidentally receives just the data it wants, it can cancel its request
-            when(validateBus) {
-              validateBus := false.B
-            }
-            prHlt := false.B
-            io.response := true.B
-            enableIO()
-            printf("pid %d: Stage 18\n", hostPid)
-            cacheData(busIndex) := busData
-            printf("pid %d: L1Cache(%d) -> %d\n", hostPid, busIndex, busData)
-            tagDirectory(index) := busTag
-            cacheOutput := busData
-            cacheStatus(index) := Shared
-            printStatus(index, Shared)
-            // otherwise it needs to inform other caches first
-          }.otherwise {
-            printf("pid %d: Stage 19\n", hostPid)
-            enableRepl(tagDirectory(busIndex), busTag, busIndex, cacheData(busIndex), busData, Shared)
           }
         }
       }
@@ -344,186 +313,224 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
     printStatus(replIndex, replState)
   }
 
-  // the Repl trans from the bus appears when another Owned cache will be replaced and this cache is Shared
-  // and this cache has been chosen to upgrade
-  when(busId === hostPid && busValid && busTrans === Repl) {
-    printf("pid %d: Stage 21\n", hostPid)
-    when(cacheStatus(busIndex) === Shared) {
-      // when there are at least two Shared cache, this chosen cache becomes Owned
-      when(busState === Owned) {
-        cacheStatus(busIndex) := Owned
-        printStatus(busIndex, Owned)
-        // SPECIAL USE
-        // when there is only one Shared cache, this chose cache becomes Exclusive
-      }.otherwise {
-        cacheStatus(busIndex) := Exclusive
-        printStatus(busIndex, Exclusive)
-      }
-    }
-  }
-
-  // processor requests
-  printf("pid %d: prHlt: %d\n", hostPid, prHlt)
-  when(busId === hostPid && busValid && prHlt) {
-    printf("pid %d: Stage 22\n", hostPid)
-    validateBus := false.B
-    busOut := 0.U.asTypeOf(new BusData)
-    // the response is from the memory (one response can only respond to the origin of the request)
-    when(busTrans === Fill && busAddr === prAddr) {
-      when(prOp === PrRd) {
-        // when this position has Exclusive data or Invalidated data, it can be replaced at once
-        when(cacheStatus(busIndex) === Exclusive || cacheStatus(busIndex) === Invalidated || busTag === tagDirectory(index)) {
-          prHlt := false.B
-          io.response := true.B
-          enableIO()
-          printf("pid %d: Stage 23\n", hostPid)
-          cacheData(busIndex) := busData
-          printf("pid %d: L1Cache(%d) -> %d\n", hostPid, busIndex, busData)
-          tagDirectory(index) := busTag
-          cacheOutput := busData
-          cacheStatus(index) := Exclusive
-          printStatus(index, Exclusive)
-          // otherwise it needs to inform other caches first
+  when(busId === hostPid && busValid) {
+    // the Repl trans from the bus appears when another Owned cache will be replaced and this cache is Shared
+    // and this cache has been chosen to upgrade
+    when(busTrans === Repl) {
+      printf("pid %d: Stage 21\n", hostPid)
+      when(cacheStatus(busIndex) === Shared) {
+        // when there are at least two Shared cache, this chosen cache becomes Owned
+        when(busState === Owned) {
+          cacheStatus(busIndex) := Owned
+          printStatus(busIndex, Owned)
+          // SPECIAL USE
+          // when there is only one Shared cache, this chose cache becomes Modified
         }.otherwise {
-          printf("pid %d: Stage 24\n", hostPid)
-          enableRepl(tagDirectory(busIndex), busTag, busIndex, cacheData(busIndex), busData, Exclusive)
-        }
-      }
-      // these transactions must wait until the bus receives ack to update this cache
-    }.elsewhen(busTrans === BusUpgrade || busTrans === BusRdX) {
-      when(cacheStatus(busIndex) === Exclusive || cacheStatus(busIndex) === Invalidated || busTag === tagDirectory(index)) {
-        printf("pid %d: Stage 25\n", hostPid)
-        when(busTrans === BusUpgrade) {
-          cacheStatus(index) := Exclusive
-          printStatus(index, Exclusive)
-        }.otherwise {
-          cacheStatus(index) := Modified
-          printStatus(index, Modified)
-        }
-        tagDirectory(index) := tag
-        cacheData(index) := busData
-        printf("pid %d: L1Cache(%d) -> %d\n", hostPid, index, busData)
-        prHlt := false.B
-        respNext := true.B
-        enableIO()
-      }.otherwise {
-        printf("pid %d: Stage 26\n", hostPid)
-        when(busTrans === BusUpgrade) {
-          enableRepl(tagDirectory(busIndex), busTag, busIndex, cacheData(busIndex), busData, Exclusive)
-        }.otherwise {
-          enableRepl(tagDirectory(busIndex), busTag, busIndex, cacheData(busIndex), busData, Modified)
+          cacheStatus(busIndex) := Modified
+          printStatus(busIndex, Modified)
         }
       }
     }
-  }.elsewhen(!prHlt) {
-    printf("pid %d: Stage 27\n", hostPid)
-    // the request from the processor hits
-    when(isHit(prAddr)) {
-      // when the request on the bus invalidates the same address as the processor's,
-      // it needs to delay the processor request
-      when(invalidateNext && io.busIn.addr === prAddr) {
-        processing := true.B
-        ioPrOp := ioPrOp
-        ioPrAddr := ioPrAddr
-        ioPrData := ioPrData
-      }.otherwise {
-        switch(cacheStatus(index)) {
-          is(Modified) {
-            switch(prOp) {
-              is(PrRd) {
-                printf("pid %d: Stage 28\n", hostPid)
-                cacheOutput := cacheData(index)
-                io.response := true.B
-                enableIO()
+      .elsewhen(prHlt) {
+        // the response from the bus is from another processor but it does not hit a block
+        when(busTrans === Flush && busAddr === prAddr) {
+          printf("pid %d: Stage 17\n", hostPid)
+          when(prOp === PrRd) {
+            // when this position has Exclusive data or Invalidated data, it can be replaced at once
+            when(cacheStatus(busIndex) === Exclusive || cacheStatus(busIndex) === Invalidated || busTag === tagDirectory(index)) {
+              // if this cache is not the origin of the flush transaction
+              // but it coincidentally receives just the data it wants, it can cancel its request
+              when(validateBus) {
+                validateBus := false.B
               }
-              is(PrWr) {
-                when(!answeringNext) {
-                  printf("pid %d: Stage 29\n", hostPid)
-                  cacheData(index) := prData
-                  printf("pid %d: L1Cache(%d) -> %d\n", hostPid, index, prData)
-                  tagDirectory(index) := tag
+              prHlt := false.B
+              io.response := true.B
+              enableIO()
+              printf("pid %d: Stage 18\n", hostPid)
+              cacheData(busIndex) := busData
+              printf("pid %d: L1Cache(%d) -> %d\n", hostPid, busIndex, busData)
+              tagDirectory(index) := busTag
+              cacheOutput := busData
+              cacheStatus(index) := Shared
+              printStatus(index, Shared)
+              // otherwise it needs to inform other caches first
+            }
+              .otherwise {
+                printf("pid %d: Stage 19\n", hostPid)
+                enableRepl(tagDirectory(busIndex), busTag, busIndex, cacheData(busIndex), busData, Shared)
+              }
+          }
+        }
+          .otherwise {
+            printf("pid %d: Stage 22\n", hostPid)
+            validateBus := false.B
+            busOut := 0.U.asTypeOf(new BusData)
+            // the response is from the memory (one response can only respond to the origin of the request)
+            when(busTrans === Fill && busAddr === prAddr) {
+              when(prOp === PrRd) {
+                // when this position has Exclusive data or Invalidated data, it can be replaced at once
+                when(cacheStatus(busIndex) === Exclusive || cacheStatus(busIndex) === Invalidated || busTag === tagDirectory(index)) {
+                  prHlt := false.B
                   io.response := true.B
                   enableIO()
+                  printf("pid %d: Stage 23\n", hostPid)
+                  cacheData(busIndex) := busData
+                  printf("pid %d: L1Cache(%d) -> %d\n", hostPid, busIndex, busData)
+                  tagDirectory(index) := busTag
+                  cacheOutput := busData
+                  cacheStatus(index) := Exclusive
+                  printStatus(index, Exclusive)
+                  // otherwise it needs to inform other caches first
+                }
+                  .otherwise {
+                    printf("pid %d: Stage 24\n", hostPid)
+                    enableRepl(tagDirectory(busIndex), busTag, busIndex, cacheData(busIndex), busData, Exclusive)
+                  }
+              }
+              // these transactions must wait until the bus receives ack to update this cache
+            }
+              .elsewhen(busTrans === BusUpgrade || busTrans === BusRdX) {
+                when(cacheStatus(busIndex) === Exclusive || cacheStatus(busIndex) === Invalidated || busTag === tagDirectory(index)) {
+                  printf("pid %d: Stage 25\n", hostPid)
+                  when(busTrans === BusUpgrade) {
+                    cacheStatus(index) := Exclusive
+                    printStatus(index, Exclusive)
+                  }
+                    .otherwise {
+                      cacheStatus(index) := Modified
+                      printStatus(index, Modified)
+                    }
+                  tagDirectory(index) := tag
+                  cacheData(index) := busData
+                  printf("pid %d: L1Cache(%d) -> %d\n", hostPid, index, busData)
+                  prHlt := false.B
+                  respNext := true.B
+                  enableIO()
+                }
+                  .otherwise {
+                    printf("pid %d: Stage 26\n", hostPid)
+                    when(busTrans === BusUpgrade) {
+                      enableRepl(tagDirectory(busIndex), busTag, busIndex, cacheData(busIndex), busData, Exclusive)
+                    }
+                      .otherwise {
+                        enableRepl(tagDirectory(busIndex), busTag, busIndex, cacheData(busIndex), busData, Modified)
+                      }
+                  }
+              }
+          }
+      }
+  }
+    .elsewhen(!prHlt) {
+      printf("pid %d: Stage 27\n", hostPid)
+      // the request from the processor hits
+      when(isHit(prAddr)) {
+        // when the request on the bus invalidates the same address as the processor's,
+        // it needs to delay the processor request
+        when(invalidateNext && io.busIn.addr === prAddr) {
+          processing := true.B
+          ioPrOp := ioPrOp
+          ioPrAddr := ioPrAddr
+          ioPrData := ioPrData
+        }
+          .otherwise {
+            switch(cacheStatus(index)) {
+              is(Modified) {
+                switch(prOp) {
+                  is(PrRd) {
+                    printf("pid %d: Stage 28\n", hostPid)
+                    cacheOutput := cacheData(index)
+                    io.response := true.B
+                    enableIO()
+                  }
+                  is(PrWr) {
+                    when(!answeringNext) {
+                      printf("pid %d: Stage 29\n", hostPid)
+                      cacheData(index) := prData
+                      printf("pid %d: L1Cache(%d) -> %d\n", hostPid, index, prData)
+                      tagDirectory(index) := tag
+                      io.response := true.B
+                      enableIO()
+                    }
+                  }
+                }
+              }
+              is(Owned) {
+                switch(prOp) {
+                  is(PrRd) {
+                    printf("pid %d: Stage 30\n", hostPid)
+                    cacheOutput := cacheData(index)
+                    io.response := true.B
+                    enableIO()
+                  }
+                  is(PrWr) {
+                    printf("pid %d: Stage 31\n", hostPid)
+                    fillBus(BusUpgrade, tag, index, prData, Owned)
+                    validateBus := true.B
+
+                    prHlt := true.B
+                  }
+                }
+              }
+              is(Exclusive) {
+                switch(prOp) {
+                  is(PrRd) {
+                    printf("pid %d: Stage 32\n", hostPid)
+                    cacheOutput := cacheData(index)
+                    io.response := true.B
+                    enableIO()
+                  }
+                  is(PrWr) {
+                    when(!answeringNext) {
+                      printf("pid %d: Stage 33\n", hostPid)
+                      cacheData(index) := prData
+                      printf("pid %d: L1Cache(%d) -> %d\n", hostPid, index, prData)
+                      tagDirectory(index) := tag
+                      cacheStatus(index) := Modified
+                      printStatus(index, Modified)
+                      io.response := true.B
+                      enableIO()
+                    }
+                  }
+                }
+              }
+              is(Shared) {
+                switch(prOp) {
+                  is(PrRd) {
+                    printf("pid %d: Stage 34\n", hostPid)
+                    cacheOutput := cacheData(index)
+                    io.response := true.B
+                    enableIO()
+                  }
+                  is(PrWr) {
+                    printf("pid %d: Stage 35\n", hostPid)
+                    fillBus(BusUpgrade, tag, index, prData, Shared)
+                    validateBus := true.B
+
+                    prHlt := true.B
+                  }
                 }
               }
             }
           }
-          is(Owned) {
-            switch(prOp) {
-              is(PrRd) {
-                printf("pid %d: Stage 30\n", hostPid)
-                cacheOutput := cacheData(index)
-                io.response := true.B
-                enableIO()
-              }
-              is(PrWr) {
-                printf("pid %d: Stage 31\n", hostPid)
-                fillBus(BusUpgrade, tag, index, prData, Owned)
-                validateBus := true.B
-
-                prHlt := true.B
-              }
-            }
-          }
-          is(Exclusive) {
-            switch(prOp) {
-              is(PrRd) {
-                printf("pid %d: Stage 32\n", hostPid)
-                cacheOutput := cacheData(index)
-                io.response := true.B
-                enableIO()
-              }
-              is(PrWr) {
-                when(!answeringNext) {
-                  printf("pid %d: Stage 33\n", hostPid)
-                  cacheData(index) := prData
-                  printf("pid %d: L1Cache(%d) -> %d\n", hostPid, index, prData)
-                  tagDirectory(index) := tag
-                  cacheStatus(index) := Modified
-                  printStatus(index, Modified)
-                  io.response := true.B
-                  enableIO()
-                }
-              }
-            }
-          }
-          is(Shared) {
-            switch(prOp) {
-              is(PrRd) {
-                printf("pid %d: Stage 34\n", hostPid)
-                cacheOutput := cacheData(index)
-                io.response := true.B
-                enableIO()
-              }
-              is(PrWr) {
-                printf("pid %d: Stage 35\n", hostPid)
-                fillBus(BusUpgrade, tag, index, prData, Shared)
-                validateBus := true.B
-
-                prHlt := true.B
-              }
-            }
-          }
-        }
+        // the address does not hit
       }
-      // the address does not hit
-    }.otherwise {
-      switch(prOp) {
-        is(PrRd) {
-          printf("pid %d: Stage 36\n", hostPid)
-          fillBus(BusRd, tag, index, 0.U, Invalidated)
-          validateBus := true.B
+        .otherwise {
+          switch(prOp) {
+            is(PrRd) {
+              printf("pid %d: Stage 36\n", hostPid)
+              fillBus(BusRd, tag, index, 0.U, Invalidated)
+              validateBus := true.B
 
-          prHlt := true.B
-        }
-        is(PrWr) {
-          printf("pid %d: Stage 37\n", hostPid)
-          fillBus(BusRdX, tag, index, prData, Invalidated)
-          validateBus := true.B
+              prHlt := true.B
+            }
+            is(PrWr) {
+              printf("pid %d: Stage 37\n", hostPid)
+              fillBus(BusRdX, tag, index, prData, Invalidated)
+              validateBus := true.B
 
-          prHlt := true.B
+              prHlt := true.B
+            }
+          }
         }
-      }
     }
-  }
 }

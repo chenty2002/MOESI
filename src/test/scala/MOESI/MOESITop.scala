@@ -34,6 +34,8 @@ class MOESITop() extends Module with HasMOESIParameters with Formal {
 
     val cacheStatus = Output(Vec(procNum, Vec(cacheBlockNum, UInt(stateBits.W))))
     val memAddr = Output(UInt(addrBits.W))
+
+    val cacheAddr = Output(Vec(procNum, Vec(cacheBlockNum, UInt(addrBits.W))))
   })
 
   val l1s = (0 until procNum).map(i => Module(new L1Cache(hostPid = i.U(procNumBits.W))))
@@ -56,6 +58,13 @@ class MOESITop() extends Module with HasMOESIParameters with Formal {
     // Verify interface
     io.cacheStatus(i) := l1s(i).io.cacheStatus
     prBundle(i) := Cat(l1s(i).io.procOp, l1s(i).io.prAddr, l1s(i).io.prData).asUInt
+    for(j <- 0 until cacheBlockNum) {
+      when(l1s(i).io.cacheStatus(j) =/= Invalidated) {
+        io.cacheAddr(i)(j) := getAddr(j.U(indexBits.W), l1s(i).io.tagDirectory(j))
+      }.otherwise {
+        io.cacheAddr(i)(j) := 0.U
+      }
+    }
   }
 
   def generateAssert(addr: UInt): Unit = {
