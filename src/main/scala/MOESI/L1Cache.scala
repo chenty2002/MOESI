@@ -393,8 +393,8 @@ class L1Cache(val hostPid: UInt) extends Module with HasMOESIParameters {
                 when(cacheStatus(busIndex) === Exclusive || cacheStatus(busIndex) === Invalidated || busTag === tagDirectory(index)) {
                   printf("pid %d: Stage 25\n", hostPid)
                   when(busTrans === BusUpgrade) {
-                    cacheStatus(index) := Exclusive
-                    printStatus(index, Exclusive)
+                    cacheStatus(index) := Modified
+                    printStatus(index, Modified)
                   }
                     .otherwise {
                       cacheStatus(index) := Modified

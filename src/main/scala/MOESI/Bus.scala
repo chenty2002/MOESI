@@ -33,7 +33,7 @@ class Bus extends Module with HasMOESIParameters {
   val replDataBuffer = RegInit(0.U.asTypeOf(new BusData))
   val pid = RegInit(procNum.U(procNumBits.W))
   val processing = RegInit(false.B)
-  val memData = RegInit(0.U.asTypeOf(new BusData))
+  val memData = WireDefault(0.U.asTypeOf(new BusData))
   val memWen = RegInit(false.B)
 
   val memHoldFlag = RegInit(false.B)
