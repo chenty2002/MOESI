@@ -141,7 +141,7 @@ class Bus(implicit p: Parameters) extends LazyModule with HasMOESIParameters {
                 flushCleanFlag := true.B
               }
             }.otherwise {
-              busData.pid := tarPid
+//              busData.pid := tarPid
               busData.busTransaction := Flush
               busData.addrBundle.cacheBlock := l1CachesIn(tarPid).addrBundle.cacheBlock
               //              busData := l1CachesIn(tarPid)
