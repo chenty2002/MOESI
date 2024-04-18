@@ -1,4 +1,4 @@
-package MOESI_Diplomacy_Decoupled
+package MOESI_Diplomacy_Unified
 
 import chisel3._
 import chisel3.util._

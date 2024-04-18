@@ -1,4 +1,4 @@
-package MOESI_Diplomacy_Decoupled
+package MOESI_Diplomacy_Unified
 
 import Util.RoundRobinArbiter
 import chisel3._
@@ -26,16 +26,16 @@ class Bus(implicit p: Parameters) extends LazyModule with HasMOESIParameters {
       val replacing = Output(new Bool)
     })
 
-    val l1CachesIn = VecInit(busNode.in.map(_._1.masterOut.bits.busData))
-    val validateBus = VecInit(busNode.in.map(_._1.masterOut.bits.flag))
+    val l1CachesIn = VecInit(busNode.in.map(_._1.masterOut.busData))
+    val validateBus = VecInit(busNode.in.map(_._1.masterOut.flag))
 
-    val memOut = busNode.out.map(_._1.masterOut.bits.busData)
-    val memW = busNode.out.map(_._1.masterOut.bits.flag)
+    val memOut = busNode.out.map(_._1.masterOut.busData)
+    val memW = busNode.out.map(_._1.masterOut.flag)
 
-    val l1CachesOut = busNode.in.map(_._1.masterIn.bits.busData)
-    val replFlag = busNode.in.map(_._1.masterIn.bits.flag)
+    val l1CachesOut = busNode.in.map(_._1.masterIn.busData)
+    val replFlag = busNode.in.map(_._1.masterIn.flag)
 
-    val memIn = busNode.out.map(_._1.masterIn.bits.busData)
+    val memIn = busNode.out.map(_._1.masterIn.busData)
 
     val arbiter = Module(new RoundRobinArbiter(procNum))
     arbiter.io.requests := validateBus

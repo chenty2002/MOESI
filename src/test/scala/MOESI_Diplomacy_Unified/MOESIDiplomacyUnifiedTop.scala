@@ -1,4 +1,4 @@
-package MOESI_Diplomacy_Decoupled
+package MOESI_Diplomacy_Unified
 
 import Util.File
 import chisel3._
@@ -8,7 +8,7 @@ import chiselFv._
 import freechips.rocketchip.diplomacy._
 import org.chipsalliance.cde.config.Parameters
 
-class MOESIDiplomacyDecoupledTop(implicit p: Parameters) extends LazyModule with HasMOESIParameters {
+class MOESIDiplomacyUnifiedTop(implicit p: Parameters) extends LazyModule with HasMOESIParameters {
   /*
   proc0   proc1   proc2   proc3
     |       |       |       |
@@ -95,8 +95,8 @@ class MOESIDiplomacyDecoupledTop(implicit p: Parameters) extends LazyModule with
   }
 }
 
-object MOESIDiplomacyDecoupledTop extends App {
-  val lazyModule = LazyModule(new MOESIDiplomacyDecoupledTop()(Parameters.empty))
+object MOESIDiplomacyUnifiedTop extends App {
+  val lazyModule = LazyModule(new MOESIDiplomacyUnifiedTop()(Parameters.empty))
   (new ChiselStage).emitSystemVerilog(lazyModule.module, Array("--target-dir", "generated/MOESI_Diplomacy_Decoupled"))
   File.writeOutputFile(
     "generated/MOESI_Diplomacy_Decoupled",

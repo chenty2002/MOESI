@@ -1,4 +1,4 @@
-package MOESI_Diplomacy_Decoupled
+package MOESI_Diplomacy_Unified
 
 import chisel3._
 import chisel3.util._
@@ -12,11 +12,11 @@ class L1Cache(val hostPid: UInt, val ps: MESIPS)(implicit p: Parameters) extends
   class L1ModuleImp(wrapper: LazyModule) extends LazyModuleImp(wrapper) {
     val ep = l1Node.edges.out.head
 
-    val busO = l1Node.out.map(_._1.masterOut.bits.busData)
-    val vBus = l1Node.out.map(_._1.masterOut.bits.flag)
+    val busO = l1Node.out.map(_._1.masterOut.busData)
+    val vBus = l1Node.out.map(_._1.masterOut.flag)
 
-    val busI = l1Node.out.map(_._1.masterIn.bits.busData).head
-    val replFlag = l1Node.out.map(_._1.masterIn.bits.flag).head
+    val busI = l1Node.out.map(_._1.masterIn.busData).head
+    val replFlag = l1Node.out.map(_._1.masterIn.flag).head
     val io = IO(new Bundle() {
       // processor operations
       val procOp = Input(UInt(procOpBits.W))

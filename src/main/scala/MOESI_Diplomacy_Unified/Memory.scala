@@ -1,4 +1,4 @@
-package MOESI_Diplomacy_Decoupled
+package MOESI_Diplomacy_Unified
 
 import chisel3._
 import chisel3.util._
@@ -12,11 +12,11 @@ class Memory(val ps: MESIPS)(implicit p: Parameters) extends LazyModule with Has
   class MemModuleImp(wrapper: LazyModule) extends LazyModuleImp(wrapper) {
     val ep = memNode.edges.in.head
 
-    val busIn = memNode.in.head._1.masterOut.bits.busData
-    val wen = memNode.in.head._1.masterOut.bits.flag
+    val busIn = memNode.in.head._1.masterOut.busData
+    val wen = memNode.in.head._1.masterOut.flag
 
-    val busResp = memNode.in.head._1.masterIn.bits.busData
-    memNode.in.foreach(_._1.masterIn.bits.flag := false.B)
+    val busResp = memNode.in.head._1.masterIn.busData
+    memNode.in.foreach(_._1.masterIn.flag := false.B)
 
     val mem = SyncReadMem(1 << ep.addrBits, UInt(ep.cacheBlockBits.W))
 

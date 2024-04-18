@@ -1,4 +1,4 @@
-package MOESI_Diplomacy_Decoupled
+package MOESI_Diplomacy_Unified
 
 import chisel3._
 import chisel3.util._
@@ -41,13 +41,13 @@ class BusData(ap: MESIPS) extends Bundle with HasMOESIParameters {
 }
 
 class BusBundle(mp: MESIPS) extends Bundle {
-  val masterOut = Decoupled(new Bundle() {
+  val masterOut = Output(new Bundle() {
     val busData = new BusData(mp)
     val flag = new Bool
   })
-  val masterIn = Flipped(Decoupled(new Bundle() {
+  val masterIn = Input(new Bundle() {
     val busData = new BusData(mp)
     val flag = new Bool
-  }))
+  })
 }
 
