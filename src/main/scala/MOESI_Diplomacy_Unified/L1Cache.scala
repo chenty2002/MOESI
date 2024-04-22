@@ -188,44 +188,51 @@ class L1Cache(val hostPid: UInt, val ps: MESIPS)(implicit p: Parameters) extends
               // invalidated cache reading a modified cache
               cacheStatus(busIndex) := Owned
               fillBus(Flush, busI, Modified)
-            }.elsewhen(busTrans === BusRdX || busTrans === BusUpgrade) {
-              // invalidated cache writing a modified cache
-              cacheStatus(busIndex) := Invalidated
             }
+              .elsewhen(busTrans === BusRdX || busTrans === BusUpgrade) {
+                // invalidated cache writing a modified cache
+                cacheStatus(busIndex) := Invalidated
+              }
           }
           is(Owned) { // dirty
             when(busTrans === BusRd) {
               fillBus(Flush, busI, Owned)
-            }.elsewhen(busTrans === BusRdX || busTrans === BusUpgrade) {
-              cacheStatus(busIndex) := Invalidated
-              // the Repl trans from the bus appears when another only Shared cache will be replaced and this cache is Owned
-              // so this cache needs to become Modified
-            }.elsewhen(busTrans === Repl) {
-              when(busState === Invalidated) {
-                cacheStatus(busIndex) := Modified
-              }.elsewhen(busState === Shared) {
-                fillBus(Flush, busI, Owned)
-              }
             }
+              .elsewhen(busTrans === BusRdX || busTrans === BusUpgrade) {
+                cacheStatus(busIndex) := Invalidated
+                // the Repl trans from the bus appears when another only Shared cache will be replaced and this cache is Owned
+                // so this cache needs to become Modified
+              }
+              .elsewhen(busTrans === Repl) {
+                when(busState === Invalidated) {
+                  cacheStatus(busIndex) := Modified
+                }
+                  .elsewhen(busState === Shared) {
+                    fillBus(Flush, busI, Owned)
+                  }
+              }
           }
           is(Exclusive) { // clean
             when(busTrans === BusRd) {
               cacheStatus(busIndex) := Owned
               fillBus(Flush, busI, Exclusive)
-            }.elsewhen(busTrans === BusRdX || busTrans === BusUpgrade) {
-              cacheStatus(busIndex) := Invalidated
             }
+              .elsewhen(busTrans === BusRdX || busTrans === BusUpgrade) {
+                cacheStatus(busIndex) := Invalidated
+              }
           }
           is(Shared) { // clean
             when(busTrans === BusRd) {
               // response for a read request
               fillBus(Flush, busI, Shared)
-            }.elsewhen(busTrans === BusRdX || busTrans === BusUpgrade) {
-              // invalidated cache reading shared cache
-              cacheStatus(busIndex) := Invalidated
-            }.elsewhen(busTrans === Repl) {
-              fillBus(Flush, busI, Shared)
             }
+              .elsewhen(busTrans === BusRdX || busTrans === BusUpgrade) {
+                // invalidated cache reading shared cache
+                cacheStatus(busIndex) := Invalidated
+              }
+              .elsewhen(busTrans === Repl) {
+                fillBus(Flush, busI, Shared)
+              }
           }
         }
       }
@@ -264,58 +271,61 @@ class L1Cache(val hostPid: UInt, val ps: MESIPS)(implicit p: Parameters) extends
             cacheStatus(busIndex) := Owned
             // SPECIAL USE
             // when there is only one Shared cache, this chose cache becomes Modified
-          }.otherwise {
-            cacheStatus(busIndex) := Modified
           }
-        }
-          .elsewhen(prHlt) {
-            // the response from the bus is from another processor but it does not hit a block
-            when(busTrans === Flush && busAddr === prAddr) {
-              when(prOp === PrRd) {
-                // when this position has Exclusive data or Invalidated data, it can be replaced at once
-                when(cacheStatus(busIndex) === Exclusive || cacheStatus(busIndex) === Invalidated || busTag === tagDirectory(index)) {
-                  // if this cache is not the origin of the flush transaction
-                  // but it coincidentally receives just the data it wants, it can cancel its request
-                  when(validateBus) {
-                    validateBus := false.B
-                  }
-                  prHlt := false.B
-                  io.response := true.B
-                  enableIO()
-                  cacheData(busIndex) := busData
-                  tagDirectory(index) := busTag
-                  cacheOutput := busData
-                  cacheStatus(index) := Shared
-                  // otherwise it needs to inform other caches first
-                }
-                  .otherwise {
-                    enableRepl(tagDirectory(busIndex), busTag, busIndex, cacheData(busIndex), busData, Shared)
-                  }
-              }
+            .otherwise {
+              cacheStatus(busIndex) := Modified
             }
-              .otherwise {
-                printf("pid %d: Stage 22\n", hostPid)
-                validateBus := false.B
-                busOut := 0.U.asTypeOf(new BusData(ep))
-                // the response is from the memory (one response can only respond to the origin of the request)
-                when(busTrans === Fill && busAddr === prAddr) {
-                  when(prOp === PrRd) {
-                    // when this position has Exclusive data or Invalidated data, it can be replaced at once
-                    when(cacheStatus(busIndex) === Exclusive || cacheStatus(busIndex) === Invalidated || busTag === tagDirectory(index)) {
-                      prHlt := false.B
-                      io.response := true.B
-                      enableIO()
-                      cacheData(busIndex) := busData
-                      tagDirectory(index) := busTag
-                      cacheOutput := busData
-                      cacheStatus(index) := Exclusive
-                      // otherwise it needs to inform other caches first
-                    }.otherwise {
+        }
+      }
+        .elsewhen(prHlt) {
+          // the response from the bus is from another processor but it does not hit a block
+          when(busTrans === Flush && busAddr === prAddr) {
+            when(prOp === PrRd) {
+              // when this position has Exclusive data or Invalidated data, it can be replaced at once
+              when(cacheStatus(busIndex) === Exclusive || cacheStatus(busIndex) === Invalidated || busTag === tagDirectory(index)) {
+                // if this cache is not the origin of the flush transaction
+                // but it coincidentally receives just the data it wants, it can cancel its request
+                when(validateBus) {
+                  validateBus := false.B
+                }
+                prHlt := false.B
+                io.response := true.B
+                enableIO()
+                cacheData(busIndex) := busData
+                tagDirectory(index) := busTag
+                cacheOutput := busData
+                cacheStatus(index) := Shared
+                // otherwise it needs to inform other caches first
+              }
+                .otherwise {
+                  enableRepl(tagDirectory(busIndex), busTag, busIndex, cacheData(busIndex), busData, Shared)
+                }
+            }
+          }
+            .otherwise {
+              validateBus := false.B
+              busOut := 0.U.asTypeOf(new BusData(ep))
+              // the response is from the memory (one response can only respond to the origin of the request)
+              when(busTrans === Fill && busAddr === prAddr) {
+                when(prOp === PrRd) {
+                  // when this position has Exclusive data or Invalidated data, it can be replaced at once
+                  when(cacheStatus(busIndex) === Exclusive || cacheStatus(busIndex) === Invalidated || busTag === tagDirectory(index)) {
+                    prHlt := false.B
+                    io.response := true.B
+                    enableIO()
+                    cacheData(busIndex) := busData
+                    tagDirectory(index) := busTag
+                    cacheOutput := busData
+                    cacheStatus(index) := Exclusive
+                    // otherwise it needs to inform other caches first
+                  }
+                    .otherwise {
                       enableRepl(tagDirectory(busIndex), busTag, busIndex, cacheData(busIndex), busData, Exclusive)
                     }
-                  }
-                  // these transactions must wait until the bus receives ack to update this cache
-                }.elsewhen(busTrans === BusUpgrade || busTrans === BusRdX) {
+                }
+                // these transactions must wait until the bus receives ack to update this cache
+              }
+                .elsewhen(busTrans === BusUpgrade || busTrans === BusRdX) {
                   when(cacheStatus(busIndex) === Exclusive || cacheStatus(busIndex) === Invalidated || busTag === tagDirectory(index)) {
                     cacheStatus(index) := Modified
                     tagDirectory(index) := tag
@@ -323,28 +333,31 @@ class L1Cache(val hostPid: UInt, val ps: MESIPS)(implicit p: Parameters) extends
                     prHlt := false.B
                     respNext := true.B
                     enableIO()
-                  }.otherwise {
-                    when(busTrans === BusUpgrade) {
-                      enableRepl(tagDirectory(busIndex), busTag, busIndex, cacheData(busIndex), busData, Exclusive)
-                    }.otherwise {
-                      enableRepl(tagDirectory(busIndex), busTag, busIndex, cacheData(busIndex), busData, Modified)
-                    }
                   }
+                    .otherwise {
+                      when(busTrans === BusUpgrade) {
+                        enableRepl(tagDirectory(busIndex), busTag, busIndex, cacheData(busIndex), busData, Exclusive)
+                      }
+                        .otherwise {
+                          enableRepl(tagDirectory(busIndex), busTag, busIndex, cacheData(busIndex), busData, Modified)
+                        }
+                    }
                 }
-              }
+            }
+        }
+    }
+      .elsewhen(!prHlt) {
+        // the request from the processor hits
+        when(isHit(prAddr)) {
+          // when the request on the bus invalidates the same address as the processor's,
+          // it needs to delay the processor request
+          when(invalidateNext && busI.addrBundle.addr === prAddr) {
+            processing := true.B
+            ioPrOp := ioPrOp
+            ioPrAddr := ioPrAddr
+            ioPrData := ioPrData
           }
-      }
-        .elsewhen(!prHlt) {
-          // the request from the processor hits
-          when(isHit(prAddr)) {
-            // when the request on the bus invalidates the same address as the processor's,
-            // it needs to delay the processor request
-            when(invalidateNext && busI.addrBundle.addr === prAddr) {
-              processing := true.B
-              ioPrOp := ioPrOp
-              ioPrAddr := ioPrAddr
-              ioPrData := ioPrData
-            }.otherwise {
+            .otherwise {
               switch(cacheStatus(index)) {
                 is(Modified) {
                   switch(prOp) {
@@ -413,8 +426,9 @@ class L1Cache(val hostPid: UInt, val ps: MESIPS)(implicit p: Parameters) extends
                 }
               }
             }
-            // the address does not hit
-          }.otherwise {
+          // the address does not hit
+        }
+          .otherwise {
             switch(prOp) {
               is(PrRd) {
                 fillBus(BusRd, tag, index, 0.U, Invalidated)
@@ -430,7 +444,6 @@ class L1Cache(val hostPid: UInt, val ps: MESIPS)(implicit p: Parameters) extends
               }
             }
           }
-        }
-    }
+      }
   }
 }

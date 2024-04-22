@@ -31,13 +31,13 @@ object MESIBundle {
   }
 }
 
-class BusData(ap: MESIPS) extends Bundle with HasMOESIParameters {
+class BusData(mp: MESIPS) extends Bundle with HasMOESIParameters {
   val pid = UInt(procNumBits.W)
   val busTransaction = UInt(busTransBits.W)
   val state = UInt(stateBits.W)
   val valid = Bool()
 
-  val addrBundle = MESIBundle(ap)
+  val addrBundle = MESIBundle(mp)
 }
 
 class BusBundle(mp: MESIPS) extends Bundle {

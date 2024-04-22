@@ -51,7 +51,7 @@ class L1Node(dps: Seq[MESIPS])(implicit valName: ValName)
   extends SourceNode(MESINodeImp)(dps)
 
 class BusNode(dFn: Seq[MESIPS] => MESIPS,
-               uFn: Seq[MESIPS] => MESIPS)(implicit valName: ValName)
+              uFn: Seq[MESIPS] => MESIPS)(implicit valName: ValName)
   extends NexusNode(MESINodeImp)(dFn, uFn)
 
 class MemoryNode(ups: Seq[MESIPS])(implicit valName: ValName)

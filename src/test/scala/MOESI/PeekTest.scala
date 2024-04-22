@@ -412,7 +412,7 @@ class PeekTest extends AnyFlatSpec with ChiselScalatestTester with HasMOESIParam
 
   // processor1 writes 15 into addr 1 (Invalidated -> Modified)
   // processor2 reads from addr 1 (Invalidated -> Shared, Modified -> Owned, expects 15 from cache1)
-  // processor1 writes 8 into addr 1 (Owned -> Exclusive)
+  // processor1 writes 8 into addr 1 (Owned -> Modified)
   // memory writes 8 into addr 1
   "W&2R&W" should "pass" in {
     test(new MOESITop()).withAnnotations(Seq(WriteVcdAnnotation)) { moesi =>
@@ -480,7 +480,7 @@ class PeekTest extends AnyFlatSpec with ChiselScalatestTester with HasMOESIParam
 
   // processor1 writes 15 into addr 1 (Invalidated -> Modified)
   // processor2 reads from addr 1 (Invalidated -> Shared, Modified -> Owned, expects 15 from cache1)
-  // processor2 writes 8 into addr 1 (Shared -> Exclusive)
+  // processor2 writes 8 into addr 1 (Shared -> Modified)
   // memory writes 8 into addr 1
   "W&2R&2W" should "pass" in {
     test(new MOESITop()).withAnnotations(Seq(WriteVcdAnnotation)) { moesi =>
@@ -582,6 +582,8 @@ class PeekTest extends AnyFlatSpec with ChiselScalatestTester with HasMOESIParam
           s"\t\tstate: ${moesi.io.busData.state.peekInt()}\n " +
           s"\t\tvalid: ${moesi.io.busData.valid.peekBoolean()}")
       } while (step < 20 && !moesi.io.procResp(2).peekBoolean())
+
+      endSign(moesi)
     }
   }
 }
