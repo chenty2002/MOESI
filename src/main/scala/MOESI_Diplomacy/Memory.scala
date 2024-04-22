@@ -5,7 +5,7 @@ import chisel3.util._
 import freechips.rocketchip.diplomacy._
 import org.chipsalliance.cde.config.Parameters
 
-class Memory(val ps: MESIPS)(implicit p: Parameters) extends LazyModule with HasMOESIParameters {
+class Memory(val ps: MOESIPS)(implicit p: Parameters) extends LazyModule with HasMOESIParameters {
   lazy val module = new MemModuleImp(this)
   val memDNode = Seq.fill(procNum)(new MemorySinkNode(Seq(ps)))
   val memUNode = Seq.fill(procNum)(new MemorySourceNode(Seq(ps)))

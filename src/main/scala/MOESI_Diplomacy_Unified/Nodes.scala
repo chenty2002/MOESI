@@ -7,7 +7,7 @@ import org.chipsalliance.cde.config.Parameters
 
 import scala.math._
 
-class MESIPS(val tagB: Int, val indexB: Int, val blockB: Int) {
+class MOESIPS(val tagB: Int, val indexB: Int, val blockB: Int) {
   val tagBits: Int = tagB
   val indexBits: Int = indexB
   val cacheBlockBits: Int = blockB
@@ -25,34 +25,34 @@ class MESIPS(val tagB: Int, val indexB: Int, val blockB: Int) {
   }
 
   override def equals(obj: Any): Boolean = obj match {
-    case ps: MESIPS =>
+    case ps: MOESIPS =>
       ps.tagB == this.tagB && ps.blockB == this.blockB && ps.indexB == this.indexB
     case _ => false
   }
 }
 
-object MESINodeImp extends SimpleNodeImp[MESIPS, MESIPS, MESIPS, BusBundle] {
-  override def edge(pd: MESIPS, pu: MESIPS, p: Parameters, sourceInfo: SourceInfo): MESIPS = {
-    new MESIPS(
+object MOESINodeImp extends SimpleNodeImp[MOESIPS, MOESIPS, MOESIPS, BusBundle] {
+  override def edge(pd: MOESIPS, pu: MOESIPS, p: Parameters, sourceInfo: SourceInfo): MOESIPS = {
+    new MOESIPS(
       min(pd.tagB, pu.tagB),
       min(pd.indexB, pu.indexB),
       min(pd.blockB, pu.blockB)
     )
   }
 
-  override def bundle(e: MESIPS): BusBundle = {
+  override def bundle(e: MOESIPS): BusBundle = {
     new BusBundle(e)
   }
 
-  override def render(e: MESIPS): RenderedEdge = RenderedEdge("gray")
+  override def render(e: MOESIPS): RenderedEdge = RenderedEdge("gray")
 }
 
-class L1Node(dps: Seq[MESIPS])(implicit valName: ValName)
-  extends SourceNode(MESINodeImp)(dps)
+class L1Node(dps: Seq[MOESIPS])(implicit valName: ValName)
+  extends SourceNode(MOESINodeImp)(dps)
 
-class BusNode(dFn: Seq[MESIPS] => MESIPS,
-              uFn: Seq[MESIPS] => MESIPS)(implicit valName: ValName)
-  extends NexusNode(MESINodeImp)(dFn, uFn)
+class BusNode(dFn: Seq[MOESIPS] => MOESIPS,
+              uFn: Seq[MOESIPS] => MOESIPS)(implicit valName: ValName)
+  extends NexusNode(MOESINodeImp)(dFn, uFn)
 
-class MemoryNode(ups: Seq[MESIPS])(implicit valName: ValName)
-  extends SinkNode(MESINodeImp)(ups)
+class MemoryNode(ups: Seq[MOESIPS])(implicit valName: ValName)
+  extends SinkNode(MOESINodeImp)(ups)

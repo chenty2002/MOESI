@@ -5,7 +5,7 @@ import chisel3.util._
 import freechips.rocketchip.diplomacy._
 import org.chipsalliance.cde.config.Parameters
 
-class L1Cache(val hostPid: UInt, val ps: MESIPS)(implicit p: Parameters) extends LazyModule with HasMOESIParameters {
+class L1Cache(val hostPid: UInt, val ps: MOESIPS)(implicit p: Parameters) extends LazyModule with HasMOESIParameters {
   lazy val module = new L1ModuleImp(this)
   val l1DNode = new L1SourceNode(Seq(ps))
   val l1UNode = new L1SinkNode(Seq(ps))

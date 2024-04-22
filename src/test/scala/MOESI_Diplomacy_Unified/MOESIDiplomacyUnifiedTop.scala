@@ -21,9 +21,9 @@ class MOESIDiplomacyUnifiedTop(implicit p: Parameters) extends LazyModule with H
   val l1s = (0 until procNum).map(i => LazyModule(
     new L1Cache(
       hostPid = i.U(procNumBits.W),
-      new MESIPS(2, 2, 8)
+      new MOESIPS(2, 2, 8)
     )))
-  val mem = LazyModule(new Memory(new MESIPS(2, 2, 8)))
+  val mem = LazyModule(new Memory(new MOESIPS(2, 2, 8)))
   val bus = LazyModule(new Bus)
 
   l1s.foreach(bus.busNode := _.l1Node)
@@ -48,7 +48,7 @@ class MOESIDiplomacyUnifiedTop(implicit p: Parameters) extends LazyModule with H
       l1s(i).module.io.prData := io.prData(i)
     }
 
-    val ep = new MESIPS(2, 2, 8)
+    val ep = new MOESIPS(2, 2, 8)
 
     def generateAssert(addr: UInt): Unit = {
       val (tag, index) = ep.parseAddr(addr)
