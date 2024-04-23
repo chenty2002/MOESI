@@ -13,6 +13,21 @@ object Check {
     println("hello")
   }
 
+  private def jasperGold(files: Array[String], module: String): String = {
+    s"""analyze -sv ${files.reduce((a, b) => s"$a $b")}
+       |elaborate
+       |reset reset
+       |clock clock
+       |
+       |set_prove_time_limit 168h
+       |set_proofgrid_per_engine_max_jobs 64
+       |set_per_engine_threads 16
+       |
+       |prove -all
+       |report
+       |""".stripMargin
+  }
+
   private def sby(mode: String = "prove", engines: String = "smtbmc boolector", depthStr: String, files: Array[String], module: String) = {
     s"""[options]
        |mode $mode
@@ -41,6 +56,10 @@ object Check {
        |""".stripMargin
   }
 
+  def jg[T <: RawModule](dutGen: () => T) = {
+    checkJG(dutGen)
+  }
+
   def bmc[T <: RawModule](dutGen: () => T, depth: Int = 20) = {
     check(dutGen, "bmc", depth)
   }
@@ -51,6 +70,28 @@ object Check {
 
   def pdr[T <: RawModule](dutGen: () => T, depth: Int = 20) = {
     check(dutGen, "abcPdr", depth)
+  }
+
+  private def checkJG[T <: RawModule](dutGen: () => T) = {
+    generateRTL(dutGen, "_jg")
+    val mod = modName(dutGen)
+    val jgTCL = s"$mod.tcl"
+    val dirName = mod + "_jg"
+
+    val dir = new File(dirName)
+    val files = dir.listFiles.filter(_.getName.endsWith(".sv")).map(_.getName)
+
+    if (dir.listFiles.exists(_.getName.equals(mod))) {
+      new ProcessBuilder("rm", "-rf", "./" + mod).directory(dir).start()
+    }
+
+    val jgFileContent = jasperGold(files, mod)
+    new PrintWriter(dirName + "/" + jgFileContent) {
+      write(jgFileContent)
+      close()
+    }
+
+    new ProcessBuilder("jg", "-allow_unsupported_OS", "-no_gui", "-tcl", jgTCL).directory(dir).start()
   }
 
 
