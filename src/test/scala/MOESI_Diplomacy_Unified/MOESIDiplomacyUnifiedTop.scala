@@ -34,7 +34,7 @@ class MOESIDiplomacyUnifiedTop(implicit p: Parameters) extends LazyModule with H
   class MESITopModule(wrapper: LazyModule) extends LazyModuleImp(wrapper) with Formal {
     val io = IO(new Bundle() {
       val procOp = Input(Vec(procNum, UInt(procOpBits.W)))
-      val procResp = Output(Vec(procNum, new Bool))
+      val response = Output(Vec(procNum, new Bool))
       val addr = Input(Vec(procNum, UInt(4.W)))
       val prData = Input(Vec(procNum, UInt(8.W)))
       val cacheOutput = Output(Vec(procNum, UInt(8.W)))
@@ -42,7 +42,7 @@ class MOESIDiplomacyUnifiedTop(implicit p: Parameters) extends LazyModule with H
 
     for (i <- 0 until procNum) {
       l1s(i).module.io.procOp := io.procOp(i)
-      io.procResp(i) := l1s(i).module.io.response
+      io.response(i) := l1s(i).module.io.response
       l1s(i).module.io.prAddr := io.addr(i)
       io.cacheOutput(i) := l1s(i).module.io.cacheOutput
       l1s(i).module.io.prData := io.prData(i)

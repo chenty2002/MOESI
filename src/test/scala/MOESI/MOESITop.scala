@@ -18,7 +18,7 @@ class MOESITop() extends Module with HasMOESIParameters with Formal {
 
   val io = IO(new Bundle() {
     val procOp = Input(Vec(procNum, UInt(procOpBits.W)))
-    val procResp = Output(Vec(procNum, new Bool))
+    val response = Output(Vec(procNum, new Bool))
     val addr = Input(Vec(procNum, UInt(addrBits.W)))
     val prData = Input(Vec(procNum, UInt(cacheBlockBits.W)))
     val cacheOutput = Output(Vec(procNum, UInt(cacheBlockBits.W)))
@@ -44,7 +44,7 @@ class MOESITop() extends Module with HasMOESIParameters with Formal {
 
   for (i <- 0 until procNum) {
     l1s(i).io.procOp := io.procOp(i)
-    io.procResp(i) := l1s(i).io.response
+    io.response(i) := l1s(i).io.response
     l1s(i).io.prAddr := io.addr(i)
     io.cacheOutput(i) := l1s(i).io.cacheOutput
     l1s(i).io.prData := io.prData(i)
